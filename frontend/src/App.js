@@ -1,53 +1,80 @@
-import { useEffect } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import { Toaster } from "sonner";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import { AuthProvider } from "@/context/AuthContext";
+import { CartProvider } from "@/context/CartContext";
+import { FavoritesProvider } from "@/context/FavoritesContext";
+import { ProtectedRoute, ScrollToTop } from "@/components/Guards";
+import Layout from "@/components/layout/Layout";
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+import Home from "@/pages/Home";
+import Catalog from "@/pages/Catalog";
+import ProductDetail from "@/pages/ProductDetail";
+import Cart from "@/pages/Cart";
+import Checkout from "@/pages/Checkout";
+import Login from "@/pages/Login";
+import Register from "@/pages/Register";
+import Account from "@/pages/Account";
+import Favorites from "@/pages/Favorites";
+import Brands from "@/pages/Brands";
+import Contact from "@/pages/Contact";
+import { ForgotPassword, ResetPassword } from "@/pages/PasswordRecovery";
 
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
+import AdminLayout from "@/pages/admin/AdminLayout";
+import Dashboard from "@/pages/admin/Dashboard";
+import AdminProducts from "@/pages/admin/AdminProducts";
+import AdminCategories from "@/pages/admin/AdminCategories";
+import AdminBrands from "@/pages/admin/AdminBrands";
+import AdminOrders from "@/pages/admin/AdminOrders";
+import AdminCustomers from "@/pages/admin/AdminCustomers";
+import AdminBanners from "@/pages/admin/AdminBanners";
 
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+const Shell = ({ children }) => <Layout>{children}</Layout>;
 
 function App() {
   return (
     <div className="App">
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
+        <AuthProvider>
+          <CartProvider>
+            <FavoritesProvider>
+              <ScrollToTop />
+              <Toaster theme="dark" position="top-right" richColors />
+              <Routes>
+                <Route path="/" element={<Shell><Home /></Shell>} />
+                <Route path="/produtos" element={<Shell><Catalog /></Shell>} />
+                <Route path="/grupo/:group" element={<Shell><Catalog /></Shell>} />
+                <Route path="/produto/:slug" element={<Shell><ProductDetail /></Shell>} />
+                <Route path="/marcas" element={<Shell><Brands /></Shell>} />
+                <Route path="/contato" element={<Shell><Contact /></Shell>} />
+                <Route path="/carrinho" element={<Shell><Cart /></Shell>} />
+                <Route path="/checkout" element={<Shell><Checkout /></Shell>} />
+                <Route path="/favoritos" element={<Shell><Favorites /></Shell>} />
+                <Route path="/login" element={<Shell><Login /></Shell>} />
+                <Route path="/cadastro" element={<Shell><Register /></Shell>} />
+                <Route path="/recuperar-senha" element={<Shell><ForgotPassword /></Shell>} />
+                <Route path="/reset-password" element={<Shell><ResetPassword /></Shell>} />
+                <Route
+                  path="/conta"
+                  element={<ProtectedRoute><Shell><Account /></Shell></ProtectedRoute>}
+                />
+                <Route
+                  path="/admin"
+                  element={<ProtectedRoute adminOnly><AdminLayout /></ProtectedRoute>}
+                >
+                  <Route index element={<Dashboard />} />
+                  <Route path="produtos" element={<AdminProducts />} />
+                  <Route path="categorias" element={<AdminCategories />} />
+                  <Route path="marcas" element={<AdminBrands />} />
+                  <Route path="pedidos" element={<AdminOrders />} />
+                  <Route path="clientes" element={<AdminCustomers />} />
+                  <Route path="banners" element={<AdminBanners />} />
+                </Route>
+              </Routes>
+            </FavoritesProvider>
+          </CartProvider>
+        </AuthProvider>
       </BrowserRouter>
     </div>
   );
