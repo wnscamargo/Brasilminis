@@ -1,0 +1,133 @@
+{
+  "theme_mode": "dark",
+  "brand": {
+    "name": "Brasil Minis",
+    "vibe": "Premium, automotive, exclusive, passion for cars, Gran Turismo meets Apple and Nike."
+  },
+  "typography": {
+    "fonts": {
+      "headings": "'Orbitron', sans-serif",
+      "body": "'Exo 2', sans-serif",
+      "fallback": "'Poppins', sans-serif"
+    },
+    "scale": {
+      "h1": "text-5xl lg:text-7xl tracking-tighter uppercase font-bold",
+      "h2": "text-3xl lg:text-4xl tracking-tight uppercase font-bold",
+      "h3": "text-2xl font-medium tracking-tight",
+      "body": "text-base text-gray-300 leading-relaxed",
+      "small": "text-sm text-gray-400"
+    }
+  },
+  "colors": {
+    "primary": "#1E3A8A",
+    "secondary": "#009B3A",
+    "accent": "#FFC107",
+    "neutrals": {
+      "black": "#111111",
+      "dark_gray": "#1F1F1F",
+      "medium_gray": "#2E2E2E",
+      "white": "#FFFFFF"
+    },
+    "surfaces": {
+      "background": "#111111",
+      "card": "#1F1F1F",
+      "hover": "#2E2E2E",
+      "glass": "bg-[#1F1F1F]/70 backdrop-blur-xl border border-white/10"
+    }
+  },
+  "textures": {
+    "patterns": [
+      "Subtle carbon fiber weave (svg background) at 5% opacity.",
+      "Checkered flag accents on high-speed / performance categories.",
+      "Honeycomb mesh (like car grilles) for tech specs backgrounds.",
+      "Tire tread lines as subtle dividers.",
+      "Green/Yellow/Blue Brazil-inspired stripes (very subtle line, 2px max height) as header accent or bottom border."
+    ]
+  },
+  "visual_enhancers": {
+    "animations": "Smooth Framer Motion scroll, subtle hover lifts (-translate-y-1), and glow effects on active states.",
+    "borders": "Rounded borders (rounded-xl, rounded-2xl), 1px solid #2E2E2E for cards.",
+    "shadows": "Soft, diffuse shadows (shadow-[0_8px_32px_rgba(0,0,0,0.5)]) to separate dark layers.",
+    "icons": "Outline icons (lucide-react) in white or primary blue."
+  },
+  "layouts": {
+    "hero": "Full width image of premium dark garage with illuminated diecast cars. Overlay: bg-black/40. Left-aligned typography. H1 'Sua paixão em miniatura.', Subtitle 'As melhores marcas e edições exclusivas estão aqui.'",
+    "product_grid": "High-density grid layout. Ample padding (p-6) inside cards. Dark cards (#1F1F1F) on darker bg (#111111).",
+    "spacing": "Generous spacing. py-24 for sections. gap-8 for grids."
+  },
+  "components": {
+    "buttons": {
+      "comprar_agora": "bg-[#FFC107] text-[#111111] font-bold uppercase tracking-wider rounded-md px-8 py-3 hover:bg-[#e0a800] transition-colors shadow-[0_0_15px_rgba(255,193,7,0.3)]",
+      "adicionar_carrinho": "bg-[#1E3A8A] text-white font-medium rounded-md px-8 py-3 hover:bg-[#152b66] transition-colors",
+      "favoritar": "bg-[#111111] text-white border border-[#FFFFFF] rounded-md px-6 py-3 hover:bg-white/10 transition-colors"
+    },
+    "badges": {
+      "style": "px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full",
+      "NOVO": "bg-[#1E3A8A] text-white",
+      "LANÇAMENTO": "bg-[#009B3A] text-white",
+      "PROMOÇÃO": "bg-[#FFC107] text-[#111111]",
+      "TREASURE_HUNT": "bg-gradient-to-r from-green-400 to-emerald-600 text-white",
+      "SUPER_TH": "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-[0_0_10px_rgba(168,85,247,0.5)]",
+      "PRÉ_VENDA": "bg-[#2E2E2E] text-white border border-white/20",
+      "FRETE_GRÁTIS": "bg-[#009B3A]/20 text-[#009B3A] border border-[#009B3A]/30"
+    },
+    "trust_icons": {
+      "style": "Flex row, gap-4, center-aligned. Outline icons (24px) + small Exo 2 text.",
+      "items": ["Compra Segura", "Entrega Nacional", "Produtos Originais", "Colecionadores", "Atendimento Especializado"]
+    }
+  },
+  "image_urls": [
+    {
+      "url": "https://images.unsplash.com/photo-1637494873826-795116ba38cc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODl8MHwxfHNlYXJjaHwzfHxwcmVtaXVtJTIwZGFyayUyMGdhcmFnZSUyMGx1eHVyeSUyMGNhcnN8ZW58MHx8fHwxNzg1OTY3MDQ4fDA&ixlib=rb-4.1.0&q=85",
+      "category": "hero_background",
+      "description": "Premium dark garage with illuminated cars."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1780577458908-aa868402b3b6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwxfHxob3QlMjB3aGVlbHMlMjBkaWVjYXN0JTIwcG9yc2NoZSUyMG1pbmlhdHVyZXxlbnwwfHx8fDE3ODU5NjcwNDh8MA&ixlib=rb-4.1.0&q=85",
+      "category": "product_feature",
+      "description": "Hot Wheels Orange Porsche model car."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1752900135471-956e6c4685af?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHw0fHxob3QlMjB3aGVlbHMlMjBkaWVjYXN0JTIwcG9yc2NoZSUyMG1pbmlhdHVyZXxlbnwwfHx8fDE3ODU5NjcwNDh8MA&ixlib=rb-4.1.0&q=85",
+      "category": "product_feature",
+      "description": "Hot Wheels Blue/White Porsche model car."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1594051673969-172a6f721d3c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTF8MHwxfHNlYXJjaHwxfHxibXclMjBtJTIwbW9kZWwlMjBjYXIlMjBtaW5pYXR1cmV8ZW58MHx8fHwxNzg1OTY3MDQ4fDA&ixlib=rb-4.1.0&q=85",
+      "category": "product_feature",
+      "description": "Black BMW miniature."
+    }
+  ],
+  "accessibility": {
+    "contrast": "Ensure Exo 2 body text on #1F1F1F and #111111 meets APCA contrast standards. Use off-white (#E5E5E5) for body text rather than pure white to reduce eye strain.",
+    "focus": "Focus rings should use primary color #1E3A8A with offset.",
+    "testing": "All interactive and key informational elements MUST include a `data-testid` attribute to facilitate robust automated testing."
+  },
+  "instructions_to_main_agent": [
+    "Strictly apply the exact colors: Primary #1E3A8A, Secondary #009B3A, Accent #FFC107. Neutrals: #111111 (Base BG), #1F1F1F (Cards), #2E2E2E (Borders/Hover).",
+    "Use ONLY .js files for React components. Do not generate .tsx files.",
+    "Install and configure Google Fonts for 'Orbitron' and 'Exo 2' in index.html.",
+    "Implement Shadcn UI using the dark theme strategy, adapting components to use #1F1F1F for surfaces, 1px #2E2E2E borders, and no pure white backgrounds anywhere.",
+    "Create a discreet glass effect for sticky navigation and modals (e.g., bg-[#1F1F1F]/70 backdrop-blur-xl border-b border-[#2E2E2E]). DO NOT USE fully transparent backgrounds on elements that overlap content.",
+    "Add 'data-testid' to all buttons, links, inputs, and functional UI elements.",
+    "Apply subtle hover effects: framer-motion based small scaling (1.02) and button color transition.",
+    "The Hero Banner needs the title 'Sua paixão em miniatura.' and subtitle 'As melhores marcas e edições exclusivas estão aqui.'",
+    "Render specific Badges (NOVO, LANÇAMENTO, PROMOÇÃO, TREASURE HUNT, SUPER TH, PRÉ-VENDA, FRETE GRÁTIS) creatively using gradients or distinct brand colors on the product cards.",
+    "Implement the 'Trust Icons' section horizontally using Outline Icons (lucide-react).",
+    "Use Framer Motion for scroll entrance animations. Keep them smooth and not distracting."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Do not converge toward generic outputs. Avoid 'AI slop'.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts. Create depth through layered design elements with z-index hierarchy.",
+    "You MUST NOT apply universal transition (e.g., transition: all). Add transitions for specific interactive elements only.",
+    "You MUST NOT center align the app container. Do not add '.App { text-align: center; }' in the css file.",
+    "Always use modern button styles (pill-shaped, or slightly rounded) with interaction animations & color relevant to the app style.",
+    "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Prioritize using pre-existing components from src/components/ui when applicable.",
+    "Use sonner for toasts.",
+    "NEVER use placeholder URLs (via.placeholder.com). Use the curated images provided."
+  ]
+}
