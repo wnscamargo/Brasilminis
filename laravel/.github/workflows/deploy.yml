@@ -1,8 +1,15 @@
 name: Deploy Brasil Minis (Locaweb)
 
+# Deploy automático da branch laravel-migration.
+# NÃO faz merge na main. Requer GitHub Secrets (Settings > Secrets and variables > Actions):
+#   SSH_HOST, SSH_USER, SSH_PORT, SSH_PRIVATE_KEY, DEPLOY_PATH
+# DEPLOY_PATH ex.: /home/storage/x/yy/zzzz/brasilminis1/brasilminis/app/laravel
+# Nenhum valor sensível fica no YAML.
+
 on:
   push:
-    branches: [ main ]
+    branches: [ laravel-migration ]
+  workflow_dispatch: {}
 
 jobs:
   build-and-deploy:
@@ -17,32 +24,32 @@ jobs:
           extensions: mbstring, pdo_mysql, bcmath, gd, zip
           coverage: none
 
-      - name: Install Composer deps (build assets need autoload)
+      - name: Composer install
         run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 
-      - name: Setup Node & build assets (Vite)
+      - name: Build assets (Vite) — servidor NÃO precisa de Node em runtime
         uses: actions/setup-node@v4
         with:
           node-version: '20'
       - run: npm ci && npm run build
 
-      - name: Run tests
+      - name: Testes (Pest, SQLite em memória)
         run: |
           cp .env.example .env
           php artisan key:generate
-          # Testes usam sqlite em memória (phpunit.xml)
           ./vendor/bin/pest || true
 
       - name: Deploy via SSH (git pull + composer + migrate + cache)
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.LOCAWEB_HOST }}
-          username: ${{ secrets.LOCAWEB_USER }}
-          key: ${{ secrets.LOCAWEB_SSH_KEY }}
-          port: ${{ secrets.LOCAWEB_PORT }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd ~/brasilminis
-            git pull origin main
+            set -e
+            cd "${{ secrets.DEPLOY_PATH }}"
+            git pull origin laravel-migration
             /usr/bin/php83 ~/bin/composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
             /usr/bin/php83 artisan migrate --force
             /usr/bin/php83 artisan storage:link || true

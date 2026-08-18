@@ -24,10 +24,18 @@ npm install && npm run build      # ou: npm run dev
 php artisan serve                 # http://localhost:8000
 ```
 
-## Credenciais (seed)
-- **Admin**: `admin@brasilminis.com` / `Admin@2025` → painel em `/admin`
+## Credenciais (seed DEMO — apenas fora de produção)
+- **Admin demo**: `admin@brasilminis.com` / `Admin@2025` → `/admin`
 - **Cliente demo**: `cliente@teste.com` / `senha123`
-- **Cupons**: `BRASIL10` (10% > R$100), `MINIS20` (20% > R$300), `FRETEGRATIS`
+- **Cupons**: `BRASIL10`, `MINIS20`, `FRETEGRATIS`
+
+> Em **produção** o `DemoSeeder` é bloqueado (não cria credenciais conhecidas). Rode apenas os essenciais e crie o admin com senha segura:
+> ```bash
+> php artisan migrate --force
+> php artisan db:seed --class=Database\\Seeders\\EssentialSeeder --force
+> php artisan bm:create-admin admin@seudominio.com.br --name="Seu Nome"
+> # a senha forte é gerada e exibida uma única vez (ou use --password=...)
+> ```
 
 ## Testes (Pest)
 ```bash
@@ -47,13 +55,13 @@ Cobre: home, catálogo, cadastro, login admin, RBAC admin, carrinho, criação d
 - Pronto para **Mercado Pago**: implemente `mercadoPago()` no PaymentService, configure `MERCADOPAGO_*` no `.env`, mude `PAYMENT_DRIVER=mercadopago` e crie a rota de webhook para atualizar `payment_status`/`status` do pedido.
 
 ## Deploy Locaweb (hospedagem compartilhada)
-Estrutura sugerida:
+Estrutura sugerida (Laravel FORA do public_html):
 ```
-/home/usuario/brasilminis     <- este repositório (Laravel)
-/home/usuario/public_html     <- pasta pública do domínio
+/home/storage/.../brasilminis1/brasilminis/app/laravel   <- este repositório (Laravel)
+/home/storage/.../brasilminis1/public_html               <- pasta pública do domínio
 ```
-1. Clone o repo em `~/brasilminis`.
-2. Aponte o domínio para `public_html`. Copie o conteúdo de `brasilminis/public/` para `public_html/` **ou** use `deploy/public_html_index.php` (já ajustado para `../brasilminis`).
+1. Clone o repo (branch `laravel-migration`) em `.../brasilminis/app/laravel`.
+2. Aponte o domínio para `public_html`. Copie o conteúdo de `app/laravel/public/` para `public_html/` **ou** use `deploy/public_html_index.php` (aponta para `../brasilminis/app/laravel`).
 3. Configure `.env` (nunca versionado) com o MySQL da Locaweb:
    ```
    DB_CONNECTION=mysql

@@ -1,28 +1,34 @@
 <?php
 /**
- * index.php para o public_html da Locaweb quando o Laravel fica FORA da pasta pública.
+ * index.php para o public_html da Locaweb (Laravel FORA da pasta pública).
  *
- * Estrutura na Locaweb:
- *   /home/usuario/brasilminis         <- projeto Laravel (repositório git)
- *   /home/usuario/public_html         <- pasta pública (aponta o domínio)
+ * Estrutura real da Locaweb:
+ *   /home/storage/.../brasilminis1/brasilminis/app/laravel   <- projeto Laravel
+ *   /home/storage/.../brasilminis1/public_html               <- pasta pública do domínio
  *
- * Copie o CONTEÚDO de brasilminis/public para public_html (ou faça symlink) e
- * substitua o index.php do public_html por este arquivo, ajustando o caminho
- * relativo abaixo (../brasilminis) conforme a sua estrutura real.
+ * Copie o CONTEÚDO de .../app/laravel/public para o public_html (ou faça symlink)
+ * e substitua o index.php do public_html por este arquivo.
+ *
+ * Ajuste $base conforme a profundidade real entre public_html e app/laravel.
+ * Se necessário, use o caminho ABSOLUTO informado pela Locaweb.
  */
 
 use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
-$base = __DIR__.'/../brasilminis';
+// public_html e "brasilminis" são irmãos; o Laravel está em brasilminis/app/laravel
+$base = __DIR__.'/../brasilminis/app/laravel';
+
+// Exemplo com caminho absoluto (descomente e ajuste se o relativo não funcionar):
+// $base = '/home/storage/x/yy/zzzzzz/brasilminis1/brasilminis/app/laravel';
 
 if (file_exists($maintenance = $base.'/storage/framework/maintenance.php')) {
     require $maintenance;
 }
 
-require $base.'/vendor/autoload.php';
+require $base.'/vendor/autoload.php';   // ../brasilminis/app/laravel/vendor/autoload.php
 
-$app = require_once $base.'/bootstrap/app.php';
+$app = require_once $base.'/bootstrap/app.php'; // ../brasilminis/app/laravel/bootstrap/app.php
 
 $app->handleRequest(Request::capture());
