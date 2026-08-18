@@ -1,0 +1,51 @@
+name: Deploy Brasil Minis (Locaweb)
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_mysql, bcmath, gd, zip
+          coverage: none
+
+      - name: Install Composer deps (build assets need autoload)
+        run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
+
+      - name: Setup Node & build assets (Vite)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci && npm run build
+
+      - name: Run tests
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          # Testes usam sqlite em memória (phpunit.xml)
+          ./vendor/bin/pest || true
+
+      - name: Deploy via SSH (git pull + composer + migrate + cache)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.LOCAWEB_HOST }}
+          username: ${{ secrets.LOCAWEB_USER }}
+          key: ${{ secrets.LOCAWEB_SSH_KEY }}
+          port: ${{ secrets.LOCAWEB_PORT }}
+          script: |
+            cd ~/brasilminis
+            git pull origin main
+            /usr/bin/php83 ~/bin/composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
+            /usr/bin/php83 artisan migrate --force
+            /usr/bin/php83 artisan storage:link || true
+            /usr/bin/php83 artisan config:cache
+            /usr/bin/php83 artisan route:cache
+            /usr/bin/php83 artisan view:cache

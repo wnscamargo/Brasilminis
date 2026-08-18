@@ -38,3 +38,21 @@ Ver `/app/memory/test_credentials.md`. Admin: admin@brasilminis.com / Admin@2025
 
 ## Notes
 - MOCKED: pagamento no POST /api/orders (payment_status=paid_simulated, PIX QR fictício).
+
+---
+
+## Migração para Laravel 12 (Locaweb) — em `/app/laravel/`
+- **Fase 1 (Inventário)**: `/app/docs/MIGRATION_PHASE1_INVENTORY.md` — mapa ATUAL→NOVO + schema MySQL. Aprovada.
+- **Decisões aprovadas**: código em `/app/laravel/` (commit no GitHub); auth Laravel Breeze/sessão; dados via Seeder (28 produtos); produto = base + `product_attributes` (EAV) + `product_variants`; status EN (PENDING…REFUNDED).
+- **Fases 2–6 GERADAS** (código versionável, NÃO executado no preview pois não há PHP):
+  - Fundação: composer/bootstrap/public/configs, `.env.example`, `EnsureUserIsAdmin`, AppServiceProvider.
+  - Banco: 8 arquivos de migration → 23 tabelas (users, addresses, categories, brands, manufacturers, products+images/attributes/variants, favorites, carts/cart_items, coupons, orders/order_items/order_status_history, banners, reviews, settings, audit_logs).
+  - Models Eloquent (18) com relações/scopes/casts; Services (Cart, Order c/ transação+lockForUpdate, Payment mock→MercadoPago).
+  - Controllers (storefront, Account, Auth, Admin) + `routes/web.php` (rotas PT).
+  - Views Blade (34): layout/partials, home, catálogo, produto, carrinho, checkout(+sucesso), favoritos, marcas, contato, auth (4), conta (6), admin (9). Tailwind com identidade Brasil Minis (cores/fontes/texturas).
+  - Seeder (admin + cliente demo + 28 produtos + cupons + banner).
+  - Deploy: GitHub Actions (SSH Locaweb), `deploy/deploy.sh`, `deploy/public_html_index.php`, `.htaccess`.
+  - Testes Pest (ShopTest, OrderTest) + phpunit (SQLite em memória).
+- **Fase 7 (Produção)**: instruções no `/app/laravel/README.md` (MySQL Locaweb, secrets do Actions, SSL). Pendente execução/homologação pelo usuário.
+- **Regra crítica respeitada**: app React/FastAPI original permanece intacto como referência.
+- **Validação pendente (ambiente sem PHP)**: rodar `composer install && php artisan migrate --seed && ./vendor/bin/pest` localmente/CI.

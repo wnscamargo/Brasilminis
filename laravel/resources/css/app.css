@@ -1,0 +1,30 @@
+@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800;900&family=Exo+2:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Poppins:wght@400;500;600&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    background-color: #111111;
+    color: #e5e5e5;
+    font-family: "Exo 2", "Poppins", sans-serif;
+}
+
+h1, h2, h3, h4, .font-display {
+    font-family: "Orbitron", "Poppins", sans-serif;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #111111; }
+::-webkit-scrollbar-thumb { background: #2e2e2e; border-radius: 6px; }
+::selection { background: #ffc107; color: #111111; }
+
+@layer components {
+    .bm-card { @apply bg-bm-dark border border-bm-med rounded-2xl; }
+    .bm-glass { background: rgba(31,31,31,.72); backdrop-filter: blur(16px); border-bottom: 1px solid #2e2e2e; }
+    .bm-stripe { height: 3px; background: linear-gradient(90deg,#1E3A8A 0 33%,#009B3A 33% 66%,#FFC107 66% 100%); }
+    .btn-buy { @apply bg-bm-yellow text-bm-black font-bold uppercase tracking-wider rounded-full px-8 py-3 hover:bg-yellow-500 transition-colors; }
+    .btn-cart { @apply bg-bm-blue text-white font-medium rounded-full px-6 py-3 hover:bg-blue-900 transition-colors; }
+    .btn-fav { @apply bg-bm-black text-white border border-white rounded-full px-6 py-3 hover:bg-white/10 transition-colors; }
+    .input-bm { @apply w-full bg-bm-black border border-bm-med rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-bm-blue; }
+    .bm-honeycomb { background-color:#1f1f1f; background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,.05) 1px, transparent 0); background-size:16px 16px; }
+}
