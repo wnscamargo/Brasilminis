@@ -1,29 +1,45 @@
 #!/usr/bin/env bash
-# Deploy manual (Locaweb hospedagem compartilhada) — alternativa ao GitHub Actions.
-# Estrutura real: /home/storage/.../brasilminis1/brasilminis/app/laravel  (Laravel FORA do public_html)
-set -e
+# ------------------------------------------------------------------------------
+# Pós-deploy MANUAL na Locaweb (hospedagem compartilhada, PHP 8.3).
+#
+# IMPORTANTE:
+#   - O BUILD (composer install / vite build) acontece SOMENTE no GitHub Actions.
+#   - A Locaweb NÃO roda composer, npm, dump-autoload, symlink, exec ou proc_open.
+#   - Este script executa APENAS comandos Artisan e é tolerante a funções bloqueadas.
+#   - Use-o só se precisar rodar o pós-deploy à mão via SSH (o CI já faz isso sozinho).
+#
+# Estrutura real da Locaweb:
+#   LOCAWEB_PATH        = /home/storage/d/6c/81/brasilminis1/brasilminis/laravel  (Laravel FORA do public_html)
+#   LOCAWEB_PUBLIC_PATH = /home/storage/d/6c/81/brasilminis1/public_html          (pasta pública do domínio)
+#
+# Uso:
+#   LOCAWEB_PATH=/caminho/para/laravel LOCAWEB_PUBLIC_PATH=/caminho/para/public_html bash deploy/deploy.sh
+# ------------------------------------------------------------------------------
+set -uo pipefail
 
-APP_DIR="${DEPLOY_PATH:-$HOME/brasilminis/app/laravel}"
-PHP="/usr/bin/php83"
-COMPOSER="$PHP $HOME/bin/composer"
+PHP="${PHP_BIN:-/usr/bin/php83}"
+APP_DIR="${LOCAWEB_PATH:-$HOME/brasilminis/laravel}"
+PUBLIC_DIR="${LOCAWEB_PUBLIC_PATH:-$HOME/public_html}"
 
-cd "$APP_DIR"
+cd "$APP_DIR" || { echo "ERRO: não foi possível acessar $APP_DIR"; exit 1; }
 
-echo "==> git pull"
-git pull origin laravel-migration
+echo "==> Verificando artefato (vendor/ deve ter vindo pronto do GitHub Actions)"
+if [ ! -f vendor/autoload.php ]; then
+  echo "ERRO: vendor/autoload.php ausente. O build deve ser feito no GitHub Actions e enviado por rsync."
+  echo "       NÃO rode 'composer install' aqui — a Locaweb bloqueia php_strip_whitespace/proc_open."
+  exit 1
+fi
 
-echo "==> composer install (contornando noexec com php83)"
-$COMPOSER install --no-dev --prefer-dist --optimize-autoloader --no-interaction
+echo "==> Garantindo diretórios graváveis (sem symlink — proibido na Locaweb)"
+mkdir -p storage/framework/sessions storage/framework/views storage/framework/cache/data storage/logs bootstrap/cache "$PUBLIC_DIR/uploads"
+chmod -R 775 storage bootstrap/cache 2>/dev/null || true
 
-echo "==> migrations (NÃO destrutivas — nunca migrate:fresh / db:wipe em produção)"
-$PHP artisan migrate --force
+echo "==> Migrations (NÃO destrutivas — nunca migrate:fresh / db:wipe em produção)"
+"$PHP" artisan migrate --force || echo "AVISO: migrate falhou — verifique DB_* no .env"
 
-echo "==> storage link (fallback se symlink não permitido)"
-$PHP artisan storage:link || echo "symlink indisponível — copie storage/app/public para public/storage manualmente"
+echo "==> Cache de config/rotas/views (com fallback se função bloqueada interferir)"
+"$PHP" artisan config:cache || { echo "config:cache falhou — config:clear"; "$PHP" artisan config:clear || true; }
+"$PHP" artisan route:cache  || { echo "route:cache falhou — route:clear";   "$PHP" artisan route:clear  || true; }
+"$PHP" artisan view:cache   || { echo "view:cache falhou — view:clear";      "$PHP" artisan view:clear   || true; }
 
-echo "==> cache de config/rotas/views"
-$PHP artisan config:cache
-$PHP artisan route:cache
-$PHP artisan view:cache
-
-echo "==> Deploy concluído."
+echo "==> Pós-deploy concluído (storage:link NÃO utilizado — uploads vão para public/uploads)."

@@ -54,29 +54,59 @@ Cobre: home, catálogo, cadastro, login admin, RBAC admin, carrinho, criação d
 - **Simulado (mock)** no MVP — `App\Services\PaymentService` (driver `mock`).
 - Pronto para **Mercado Pago**: implemente `mercadoPago()` no PaymentService, configure `MERCADOPAGO_*` no `.env`, mude `PAYMENT_DRIVER=mercadopago` e crie a rota de webhook para atualizar `payment_status`/`status` do pedido.
 
-## Deploy Locaweb (hospedagem compartilhada)
-Estrutura sugerida (Laravel FORA do public_html):
-```
-/home/storage/.../brasilminis1/brasilminis/app/laravel   <- este repositório (Laravel)
-/home/storage/.../brasilminis1/public_html               <- pasta pública do domínio
-```
-1. Clone o repo (branch `laravel-migration`) em `.../brasilminis/app/laravel`.
-2. Aponte o domínio para `public_html`. Copie o conteúdo de `app/laravel/public/` para `public_html/` **ou** use `deploy/public_html_index.php` (aponta para `../brasilminis/app/laravel`).
-3. Configure `.env` (nunca versionado) com o MySQL da Locaweb:
-   ```
-   DB_CONNECTION=mysql
-   DB_HOST=...  DB_PORT=3306  DB_DATABASE=...  DB_USERNAME=...  DB_PASSWORD=...
-   APP_ENV=production  APP_DEBUG=false  APP_URL=https://seudominio.com.br
-   SESSION_SECURE_COOKIE=true
-   ```
-4. Deploy automático via **GitHub Actions** (`.github/workflows/deploy.yml`) — configure os secrets:
-   `LOCAWEB_HOST`, `LOCAWEB_USER`, `LOCAWEB_SSH_KEY`, `LOCAWEB_PORT`.
-   Fluxo: git pull → `php83 composer install --no-dev` → `migrate --force` → `config/route/view:cache`.
-5. Deploy manual alternativo: `bash deploy/deploy.sh`.
+## Deploy Locaweb — BUILD no GitHub Actions, hospedagem só executa Laravel
 
-Notas Locaweb:
-- Composer via `/usr/bin/php83 ~/bin/composer` (contorna `noexec`).
-- Se `storage:link` (symlink) não for permitido, copie `storage/app/public` para `public/storage`.
+> ⚠️ A Locaweb desabilita `php_strip_whitespace`, `proc_open`, `exec`, `shell_exec`, `system` e `symlink`.
+> Por isso **NADA de build roda na Locaweb**: sem `composer install`, sem `composer dump-autoload`,
+> sem `npm install/build`, sem `storage:link`. Todo o build acontece no **GitHub Actions** e apenas o
+> **artefato pronto** (com `vendor/` e `public/build/`) é enviado por rsync/SSH.
+
+### Fluxo
+```
+git push (branch laravel-migration)
+   → GitHub Actions: PHP 8.3 → composer install --no-dev --optimize-autoloader
+   → yarn build (Vite) → public/build
+   → rsync do Laravel (com vendor/) para LOCAWEB_PATH  (fora do public_html)
+   → rsync de public/ para LOCAWEB_PUBLIC_PATH + index.php do public_html
+   → SSH: php83 artisan migrate --force + config/route/view:cache  (com fallback, sem quebrar)
+```
+
+### Estrutura real na Locaweb
+```
+/home/storage/d/6c/81/brasilminis1/brasilminis/laravel   <- Laravel (LOCAWEB_PATH), com vendor/ pronto
+/home/storage/d/6c/81/brasilminis1/public_html           <- pasta pública (LOCAWEB_PUBLIC_PATH)
+```
+
+### GitHub Secrets (Settings → Secrets and variables → Actions)
+`LOCAWEB_HOST`, `LOCAWEB_USER`, `LOCAWEB_PORT`, `LOCAWEB_SSH_KEY` (chave privada),
+`LOCAWEB_PATH`, `LOCAWEB_PUBLIC_PATH`. Nenhum valor sensível fica no repositório.
+
+### composer.lock (obrigatório e versionado)
+Como o ambiente onde este código foi gerado não tem PHP/Composer, **gere o `composer.lock` localmente uma vez**
+e faça commit (o workflow falha propositalmente se o lock estiver ausente):
+```bash
+cd laravel
+composer install          # gera composer.lock a partir do composer.json
+git add composer.lock && git commit -m "chore: composer.lock travado para deploy"
+```
+Em produção o deploy usa **exatamente** as versões travadas no lock.
+
+### Uploads sem symlink
+`storage:link` não é usado (symlink bloqueado). Existe o disco **`uploads`** (`config/filesystems.php`)
+que grava direto numa pasta pública. Em produção configure no `.env`:
+```
+UPLOADS_ROOT=/home/storage/d/6c/81/brasilminis1/public_html/uploads
+UPLOADS_URL=https://seudominio.com.br/uploads
+```
+E use `Storage::disk('uploads')` para arquivos públicos.
+
+### Pós-deploy manual (opcional)
+O CI já roda o pós-deploy. Se precisar rodar à mão via SSH (sem composer/npm):
+```bash
+LOCAWEB_PATH=/home/storage/.../brasilminis/laravel \
+LOCAWEB_PUBLIC_PATH=/home/storage/.../public_html \
+bash deploy/deploy.sh
+```
 
 ## Independência do Emergent
 Sem `emergentintegrations`, sem pacotes de visual-edit, sem runtime persistente. Roda em qualquer host Linux com PHP 8.3 + MySQL 8. As imagens de demonstração usam URLs públicas (Unsplash) e a logo está em `config/brasilminis.php` (troque por assets locais em `public/` quando desejar).

@@ -2,33 +2,35 @@
 /**
  * index.php para o public_html da Locaweb (Laravel FORA da pasta pública).
  *
- * Estrutura real da Locaweb:
- *   /home/storage/.../brasilminis1/brasilminis/app/laravel   <- projeto Laravel
- *   /home/storage/.../brasilminis1/public_html               <- pasta pública do domínio
+ * Estrutura REAL confirmada da Locaweb:
+ *   /home/storage/d/6c/81/brasilminis1/brasilminis/laravel   <- projeto Laravel (LOCAWEB_PATH)
+ *   /home/storage/d/6c/81/brasilminis1/public_html           <- pasta pública do domínio (LOCAWEB_PUBLIC_PATH)
  *
- * Copie o CONTEÚDO de .../app/laravel/public para o public_html (ou faça symlink)
- * e substitua o index.php do public_html por este arquivo.
+ * O deploy (GitHub Actions) envia:
+ *   - o Laravel completo (com vendor/ já pronto) para .../brasilminis/laravel
+ *   - o conteúdo de laravel/public/ para .../public_html
+ *   - este arquivo como .../public_html/index.php
  *
- * Ajuste $base conforme a profundidade real entre public_html e app/laravel.
- * Se necessário, use o caminho ABSOLUTO informado pela Locaweb.
+ * IMPORTANTE: vendor/ é gerado no GitHub Actions e enviado pronto. A Locaweb NÃO roda
+ * composer/dump-autoload (php_strip_whitespace/proc_open estão bloqueados).
  */
 
 use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
-// public_html e "brasilminis" são irmãos; o Laravel está em brasilminis/app/laravel
-$base = __DIR__.'/../brasilminis/app/laravel';
+// public_html e "brasilminis" são irmãos; o Laravel está em brasilminis/laravel
+$base = __DIR__.'/../brasilminis/laravel';
 
-// Exemplo com caminho absoluto (descomente e ajuste se o relativo não funcionar):
-// $base = '/home/storage/x/yy/zzzzzz/brasilminis1/brasilminis/app/laravel';
+// Caminho ABSOLUTO confirmado (descomente se o relativo acima não resolver na Locaweb):
+// $base = '/home/storage/d/6c/81/brasilminis1/brasilminis/laravel';
 
 if (file_exists($maintenance = $base.'/storage/framework/maintenance.php')) {
     require $maintenance;
 }
 
-require $base.'/vendor/autoload.php';   // ../brasilminis/app/laravel/vendor/autoload.php
+require $base.'/vendor/autoload.php';           // vendor pronto (vindo do CI)
 
-$app = require_once $base.'/bootstrap/app.php'; // ../brasilminis/app/laravel/bootstrap/app.php
+$app = require_once $base.'/bootstrap/app.php';
 
 $app->handleRequest(Request::capture());
