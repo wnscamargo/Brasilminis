@@ -1,0 +1,43 @@
+{
+  "summary": "Full regression on Brasil Minis PostgreSQL rewrite. Wrote pytest suite (41 tests) covering health, catalog+filters+sort+related, auth (cookies, /me, refresh, logout, forgot/reset, Bearer, brute force), RBAC (admin stats 401/403/200), coupons (BRASIL10/MINIS20/FRETEGRATIS + invalid), orders w/ atomic stock decrement + oversell rejection + concurrent no-negative-stock + coupon+shipping, account (profile, password, addresses), favorites idempotent, reviews (recompute rating, auth-required), admin CRUD (products, orders, customers, banners). 40/41 backend tests PASS. Frontend smoke: home banner+products load, /produtos lists 28 items with filters, admin login→ /conta then /admin dashboard renders stats (R$4.059,13, 14 pedidos, 28 produtos, 2 clientes). Only failure: brute force lockout not enforced end-to-end because request.client.host is the ingress pod IP which rotates across ~2 pods, splitting login attempts across identifiers.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/auth/login", "issue": "Brute force protection bypassable: identifier = f\"{request.client.host}:{email}\" uses the ingress pod IP (verified 10.79.139.10 / 10.79.139.11 alternating), so attempts split across pods and MAX_ATTEMPTS is never reached per identifier. Manually observed: 8 consecutive wrong logins all return 401 (never 429). Fix: extract real client IP from X-Forwarded-For (first hop) or key only by lowercased email.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "General", "issues": ["/api/auth/me on public pages returns 401 for anonymous visitors — expected behavior but produces two console errors on every page load; consider guarding the call or suppressing 401 log noise."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix brute-force identifier: use X-Forwarded-For (real client IP) or drop IP from key so lockout works across ingress pods. Currently 6+ wrong logins for the same email still return 401 instead of 429.",
+    "Optional: skip /api/auth/me on public routes when no cookie is present to reduce 401 console noise."
+  ],
+  "critical_code_review_comments": [
+    "auth.py: rate-limit identifier uses raw request.client.host — behind K8s ingress this is the proxy IP; use request.headers.get('x-forwarded-for', request.client.host).split(',')[0].strip().",
+    "auth.py: on wrong password the code sets locked_until on EVERY failed attempt (even the first), which sort of works but means the lockout timer keeps refreshing. Consider only setting locked_until when count reaches MAX_ATTEMPTS.",
+    "admin.py stats: revenue is computed by loading all orders into memory (db.query(Order).all() twice); replace with SQL func.sum(Order.total) and date_trunc for revenue_series to scale.",
+    "orders.py / order_service.py: build_mock_payment attached only on create; GET /api/orders/{id} does not surface payment info — acceptable for MVP but document.",
+    "catalog.py: Product.badges.contains([badge]) requires JSONB column with GIN or full scan; ensure index on JSONB or precomputed columns for scale.",
+    "seed.py runs on every startup; make sure it is idempotent for products (looks OK) but be aware AUTO_CREATE_TABLES=true in preview will hide missing Alembic migrations."
+  ],
+  "updated_files": [
+    "/app/backend/tests/__init__.py",
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "97.5% (40/41)", "frontend": "100% smoke"},
+  "test_credentials": "Admin: admin@brasilminis.com / Admin@2025. Customer created dynamically per test session (TEST_<uuid>@example.com / senha123).",
+  "seed_data_creation": "Test suite creates ephemeral customers/products/banners with TEST_ prefix; product & banner created in admin CRUD test are deleted at end of that test.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "backend_test.py is authoritative regression. To re-run: cd /app/backend && pytest tests/backend_test.py -v. Brute force test will keep failing until identifier is fixed. If auth logic is changed, verify /api/auth/me still works with both httpOnly cookie AND Authorization: Bearer header. Concurrent stock test spawns 10 admin-login sessions in parallel — this counts as brute-force-safe login (correct password) so unrelated to lockout.",
+  "rca of the issue": "Brute force lockout FAIL RCA: Selected sample from login_attempts table showed two rows for the same email — one per ingress pod IP (10.79.139.10 with count=5, 10.79.139.11 with count=3). Identifier `{ip}:{email}` therefore never reaches MAX_ATTEMPTS in a single row when ingress round-robins across pods. Reproduction: `for i in {1..8}; do curl -X POST $URL/api/auth/login -d '{\"email\":\"any@x.com\",\"password\":\"wrong\"}'; done` — all return 401. Mitigation: read X-Forwarded-For (Kubernetes ingress sets it) or key identifier only on email (with per-IP as secondary layer)."
+}

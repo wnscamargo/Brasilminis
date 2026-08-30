@@ -1,11 +1,12 @@
-import os
 from datetime import datetime, timezone, timedelta
 
 import bcrypt
 import jwt
 
+from app.core.config import settings
+
 JWT_ALGORITHM = "HS256"
-ACCESS_TTL_MIN = 60 * 24  # 1 day access for convenience in MVP
+ACCESS_TTL_MIN = 60 * 24  # 1 dia (conveniência)
 REFRESH_TTL_DAYS = 7
 
 
@@ -21,10 +22,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
-def get_jwt_secret() -> str:
-    return os.environ["JWT_SECRET"]
-
-
 def create_access_token(user_id: str, email: str) -> str:
     payload = {
         "sub": user_id,
@@ -32,7 +29,7 @@ def create_access_token(user_id: str, email: str) -> str:
         "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TTL_MIN),
         "type": "access",
     }
-    return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
 def create_refresh_token(user_id: str) -> str:
@@ -41,8 +38,8 @@ def create_refresh_token(user_id: str) -> str:
         "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TTL_DAYS),
         "type": "refresh",
     }
-    return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
 def decode_token(token: str) -> dict:
-    return jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+    return jwt.decode(token, settings.JWT_SECRET, algorithms=[JWT_ALGORITHM])

@@ -1,368 +1,427 @@
-"""
-Brasil Minis - Comprehensive backend API tests.
-Covers catalog, auth (register/login/me/logout), coupons, orders, favorites,
-reviews, account, admin (RBAC), and banners.
+"""Brasil Minis backend regression suite (PostgreSQL rewrite).
+
+Runs against the public preview URL to cover cookie-based auth (SameSite=none, Secure).
 """
 import os
 import time
 import uuid
-import requests
+import concurrent.futures
+
 import pytest
+import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://vroom-preview.preview.emergentagent.com").rstrip("/")
-API = f"{BASE_URL}/api"
-
 ADMIN_EMAIL = "admin@brasilminis.com"
 ADMIN_PASSWORD = "Admin@2025"
 
 
-# ---------------- Fixtures ----------------
+# ---------- Fixtures ----------
 @pytest.fixture(scope="session")
-def anon():
+def admin_session():
     s = requests.Session()
-    s.headers.update({"Content-Type": "application/json"})
+    r = s.post(f"{BASE_URL}/api/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=30)
+    assert r.status_code == 200, f"Admin login failed: {r.status_code} {r.text}"
+    body = r.json()
+    assert body["role"] == "admin"
     return s
 
 
 @pytest.fixture(scope="session")
-def customer():
+def customer_creds():
+    email = f"TEST_{uuid.uuid4().hex[:8]}@example.com"
+    password = "senha123"
     s = requests.Session()
-    s.headers.update({"Content-Type": "application/json"})
-    email = f"TEST_customer_{uuid.uuid4().hex[:8]}@teste.com"
-    r = s.post(f"{API}/auth/register", json={
-        "name": "TEST Customer",
-        "email": email,
-        "password": "senha123",
-        "newsletter": False,
-    })
-    assert r.status_code == 200, f"register failed {r.status_code} {r.text}"
-    data = r.json()
-    s.user = data
-    s.email = email
-    s.password = "senha123"
-    return s
+    r = s.post(f"{BASE_URL}/api/auth/register", json={
+        "name": "Cliente Teste", "email": email, "password": password, "newsletter": False
+    }, timeout=30)
+    assert r.status_code == 200, f"Register failed: {r.status_code} {r.text}"
+    return {"email": email, "password": password, "id": r.json()["id"], "session": s}
 
 
-@pytest.fixture(scope="session")
-def admin_sess():
-    s = requests.Session()
-    s.headers.update({"Content-Type": "application/json"})
-    r = s.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
-    assert r.status_code == 200, f"admin login failed {r.status_code} {r.text}"
-    assert r.json().get("role") == "admin"
-    return s
+@pytest.fixture()
+def customer_session(customer_creds):
+    return customer_creds["session"]
 
 
-# ---------------- Health ----------------
-def test_root_health(anon):
-    r = anon.get(f"{API}/")
-    assert r.status_code == 200
-    assert "Brasil Minis" in r.json().get("message", "")
+# ---------- Health / Root ----------
+class TestHealth:
+    def test_health(self):
+        r = requests.get(f"{BASE_URL}/api/health", timeout=15)
+        assert r.status_code == 200
+        assert r.json() == {"status": "ok"}
+
+    def test_root(self):
+        r = requests.get(f"{BASE_URL}/api/", timeout=15)
+        assert r.status_code == 200
+        assert "online" in r.json()["message"].lower()
 
 
-# ---------------- Catalog ----------------
+# ---------- Catalog ----------
 class TestCatalog:
-    def test_list_products_seeded(self, anon):
-        r = anon.get(f"{API}/products")
+    def test_list_products(self):
+        r = requests.get(f"{BASE_URL}/api/products?limit=5", timeout=15)
         assert r.status_code == 200
-        data = r.json()
-        assert "items" in data and "total" in data
-        assert data["total"] >= 20, f"expected >=20 seeded products, got {data['total']}"
-        assert len(data["items"]) > 0
-        p = data["items"][0]
-        assert "id" in p and "slug" in p and "price" in p
-        assert "_id" not in p
+        d = r.json()
+        for k in ("total", "page", "limit", "items"):
+            assert k in d
+        assert d["limit"] == 5
+        assert len(d["items"]) <= 5
+        assert d["total"] >= 1
 
-    def test_filter_by_search(self, anon):
-        r = anon.get(f"{API}/products", params={"search": "mochila"})
+    def test_filters(self):
+        r = requests.get(f"{BASE_URL}/api/products?featured=true", timeout=15)
         assert r.status_code == 200
-        items = r.json()["items"]
-        assert all("mochila" in (p["name"] + p.get("description","")).lower() or "mochila" in p.get("category","").lower() for p in items) or len(items) >= 1
+        for it in r.json()["items"]:
+            assert it["featured"] is True
 
-    def test_filter_sort_price_asc(self, anon):
-        r = anon.get(f"{API}/products", params={"sort": "price_asc", "limit": 5})
+    def test_search(self):
+        r = requests.get(f"{BASE_URL}/api/products?search=mini", timeout=15)
         assert r.status_code == 200
-        prices = [p["price"] for p in r.json()["items"]]
+        assert isinstance(r.json()["items"], list)
+
+    def test_sort_price_asc(self):
+        r = requests.get(f"{BASE_URL}/api/products?sort=price_asc&limit=10", timeout=15)
+        assert r.status_code == 200
+        prices = [i["price"] for i in r.json()["items"]]
         assert prices == sorted(prices)
 
-    def test_pagination(self, anon):
-        r = anon.get(f"{API}/products", params={"limit": 5, "page": 2})
-        assert r.status_code == 200
-        assert r.json()["page"] == 2
-        assert len(r.json()["items"]) <= 5
-
-    def test_get_product_by_slug_and_related(self, anon):
-        items = anon.get(f"{API}/products", params={"limit": 1}).json()["items"]
-        slug = items[0]["slug"]
-        r = anon.get(f"{API}/products/{slug}")
+    def test_product_by_slug_and_related(self):
+        base = requests.get(f"{BASE_URL}/api/products?limit=1", timeout=15).json()["items"][0]
+        slug = base["slug"]
+        r = requests.get(f"{BASE_URL}/api/products/{slug}", timeout=15)
         assert r.status_code == 200
         assert r.json()["slug"] == slug
-        rel = anon.get(f"{API}/products/{slug}/related")
-        assert rel.status_code == 200
-        assert isinstance(rel.json(), list)
+        r2 = requests.get(f"{BASE_URL}/api/products/{slug}/related", timeout=15)
+        assert r2.status_code == 200
+        assert isinstance(r2.json(), list)
 
-    def test_product_not_found(self, anon):
-        r = anon.get(f"{API}/products/does-not-exist-xyz")
+    def test_product_not_found(self):
+        r = requests.get(f"{BASE_URL}/api/products/nope-nope-{uuid.uuid4().hex[:6]}", timeout=15)
         assert r.status_code == 404
 
-    def test_categories_and_brands(self, anon):
-        r = anon.get(f"{API}/categories")
-        assert r.status_code == 200 and len(r.json()) > 0
-        first = r.json()[0]
-        assert "slug" in first
-        r2 = anon.get(f"{API}/categories/{first['slug']}")
-        assert r2.status_code == 200
-        rb = anon.get(f"{API}/brands")
-        assert rb.status_code == 200 and len(rb.json()) > 0
+    def test_categories_and_brands(self):
+        rc = requests.get(f"{BASE_URL}/api/categories", timeout=15)
+        assert rc.status_code == 200 and isinstance(rc.json(), list)
+        rb = requests.get(f"{BASE_URL}/api/brands", timeout=15)
+        assert rb.status_code == 200 and isinstance(rb.json(), list)
 
-    def test_banners(self, anon):
-        r = anon.get(f"{API}/banners")
+    def test_banners(self):
+        r = requests.get(f"{BASE_URL}/api/banners", timeout=15)
         assert r.status_code == 200
         assert isinstance(r.json(), list)
 
 
-# ---------------- Auth ----------------
+# ---------- Auth ----------
 class TestAuth:
-    def test_register_login_me_logout_cycle(self, anon):
+    def test_admin_login_sets_cookies(self, admin_session):
+        cookies = admin_session.cookies.get_dict()
+        assert "access_token" in cookies
+        assert "refresh_token" in cookies
+
+    def test_me_with_cookie(self, admin_session):
+        r = admin_session.get(f"{BASE_URL}/api/auth/me", timeout=15)
+        assert r.status_code == 200
+        assert r.json()["email"] == ADMIN_EMAIL
+        assert r.json()["role"] == "admin"
+
+    def test_me_unauthenticated(self):
+        r = requests.get(f"{BASE_URL}/api/auth/me", timeout=15)
+        assert r.status_code == 401
+
+    def test_refresh(self, admin_session):
+        r = admin_session.post(f"{BASE_URL}/api/auth/refresh", timeout=15)
+        assert r.status_code == 200
+
+    def test_logout(self):
         s = requests.Session()
-        s.headers.update({"Content-Type": "application/json"})
-        email = f"TEST_cycle_{uuid.uuid4().hex[:8]}@teste.com"
-        r = s.post(f"{API}/auth/register", json={
-            "name": "Cycle User", "email": email, "password": "senha123", "newsletter": True,
-        })
+        s.post(f"{BASE_URL}/api/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=15)
+        r = s.post(f"{BASE_URL}/api/auth/logout", timeout=15)
         assert r.status_code == 200
-        assert r.json()["email"].lower() == email.lower()
-        # httpOnly cookie set
-        assert "access_token" in s.cookies.get_dict()
 
-        me = s.get(f"{API}/auth/me")
-        assert me.status_code == 200
-        assert me.json()["email"].lower() == email.lower()
+    def test_forgot_password_generic(self):
+        r = requests.post(f"{BASE_URL}/api/auth/forgot-password",
+                          json={"email": "nonexistent@example.com"}, timeout=15)
+        assert r.status_code == 200
+        assert "instru" in r.json()["message"].lower() or "existir" in r.json()["message"].lower()
 
-        # logout
-        lo = s.post(f"{API}/auth/logout")
-        assert lo.status_code == 200
-        s.cookies.clear()
-        me2 = s.get(f"{API}/auth/me")
-        assert me2.status_code == 401
-
-        # login again
-        li = s.post(f"{API}/auth/login", json={"email": email, "password": "senha123"})
-        assert li.status_code == 200
-
-    def test_duplicate_register(self, anon, customer):
-        r = anon.post(f"{API}/auth/register", json={
-            "name": "Dup", "email": customer.email, "password": "senha123",
-        })
+    def test_reset_password_invalid_token(self):
+        r = requests.post(f"{BASE_URL}/api/auth/reset-password",
+                          json={"token": "invalid-token-xyz", "password": "novasenha123"}, timeout=15)
         assert r.status_code == 400
 
-    def test_login_bad_password(self, anon):
-        r = anon.post(f"{API}/auth/login", json={
-            "email": f"nouser_{uuid.uuid4().hex[:6]}@teste.com", "password": "wrong",
-        })
+    def test_bearer_auth_on_me(self):
+        # login and use access token as Bearer
+        r = requests.post(f"{BASE_URL}/api/auth/login",
+                          json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=15)
+        token = r.cookies.get("access_token")
+        assert token
+        rr = requests.get(f"{BASE_URL}/api/auth/me",
+                          headers={"Authorization": f"Bearer {token}"}, timeout=15)
+        assert rr.status_code == 200
+
+    def test_brute_force_lockout(self):
+        # Use a fresh email to avoid clobbering other tests
+        bad_email = f"TEST_bf_{uuid.uuid4().hex[:6]}@example.com"
+        last_status = None
+        for _ in range(6):
+            r = requests.post(f"{BASE_URL}/api/auth/login",
+                              json={"email": bad_email, "password": "wrongwrong"}, timeout=15)
+            last_status = r.status_code
+        # After MAX_ATTEMPTS wrong tries, next call should be 429
+        assert last_status in (401, 429)
+        r2 = requests.post(f"{BASE_URL}/api/auth/login",
+                           json={"email": bad_email, "password": "wrongwrong"}, timeout=15)
+        assert r2.status_code == 429, f"Expected 429 after brute force, got {r2.status_code}"
+
+
+# ---------- RBAC ----------
+class TestRBAC:
+    def test_admin_stats_anonymous(self):
+        r = requests.get(f"{BASE_URL}/api/admin/stats", timeout=15)
         assert r.status_code == 401
 
-    def test_me_requires_auth(self, anon):
-        s = requests.Session()
-        r = s.get(f"{API}/auth/me")
-        assert r.status_code == 401
-
-
-# ---------------- Coupons ----------------
-class TestCoupons:
-    @pytest.mark.parametrize("code", ["BRASIL10", "MINIS20", "FRETEGRATIS"])
-    def test_valid_coupons(self, anon, code):
-        r = anon.post(f"{API}/coupons/validate", json={"code": code})
-        assert r.status_code == 200, r.text
-        assert r.json()["code"] == code
-
-    def test_invalid_coupon(self, anon):
-        r = anon.post(f"{API}/coupons/validate", json={"code": "INVALIDXYZ"})
-        assert r.status_code == 400
-
-
-# ---------------- Orders ----------------
-class TestOrders:
-    def _pick_products(self, anon, n=2):
-        r = anon.get(f"{API}/products", params={"limit": 10})
-        items = [p for p in r.json()["items"] if p.get("stock", 0) > 0][:n]
-        return items
-
-    def test_create_order_requires_auth(self, anon):
-        r = anon.post(f"{API}/orders", json={"items": [{"product_id": "x", "quantity": 1}]})
-        assert r.status_code == 401
-
-    def test_create_order_with_coupon_and_shipping(self, anon, customer):
-        prods = self._pick_products(anon, 1)
-        assert prods
-        p = prods[0]
-        qty = 1
-        r = customer.post(f"{API}/orders", json={
-            "items": [{"product_id": p["id"], "quantity": qty}],
-            "payment_method": "pix",
-            "coupon": "BRASIL10" if p["price"] * qty >= 100 else None,
-            "address": {
-                "label": "Casa", "recipient": "TEST Customer", "street": "Rua A",
-                "number": "10", "district": "Centro", "city": "SP", "state": "SP", "zip": "01000-000",
-            },
-        })
-        assert r.status_code == 200, r.text
-        order = r.json()
-        assert order["order_number"].startswith("BM")
-        subtotal = order["subtotal"]
-        expected_shipping = 0.0 if (subtotal - order["discount"]) >= 300 else 29.9
-        assert order["shipping"] == expected_shipping
-        assert order["payment_status"] == "paid_simulated"
-        assert order["payment"]["provider"] == "mock"
-
-        # Verify GET /orders and by-id
-        my = customer.get(f"{API}/orders")
-        assert my.status_code == 200
-        assert any(o["id"] == order["id"] for o in my.json())
-        one = customer.get(f"{API}/orders/{order['id']}")
-        assert one.status_code == 200
-        assert one.json()["order_number"] == order["order_number"]
-
-    def test_empty_cart(self, customer):
-        r = customer.post(f"{API}/orders", json={"items": []})
-        assert r.status_code == 400
-
-
-# ---------------- Favorites ----------------
-class TestFavorites:
-    def test_favorites_flow(self, anon, customer):
-        p = anon.get(f"{API}/products", params={"limit": 1}).json()["items"][0]
-        pid = p["id"]
-        add = customer.post(f"{API}/favorites/{pid}")
-        assert add.status_code == 200
-        lst = customer.get(f"{API}/favorites")
-        assert lst.status_code == 200
-        assert any(x["id"] == pid for x in lst.json())
-        rm = customer.delete(f"{API}/favorites/{pid}")
-        assert rm.status_code == 200
-        lst2 = customer.get(f"{API}/favorites")
-        assert not any(x["id"] == pid for x in lst2.json())
-
-    def test_favorites_requires_auth(self, anon):
-        r = anon.get(f"{API}/favorites")
-        assert r.status_code == 401
-
-
-# ---------------- Reviews ----------------
-class TestReviews:
-    def test_add_review_updates_rating(self, anon, customer):
-        p = anon.get(f"{API}/products", params={"limit": 1}).json()["items"][0]
-        pid = p["id"]
-        r = customer.post(f"{API}/products/{pid}/reviews", json={"rating": 5, "comment": "Excelente"})
-        assert r.status_code == 200, r.text
-        # refetch product
-        fresh = anon.get(f"{API}/products/{p['slug']}").json()
-        assert fresh["reviews_count"] >= 1
-        assert fresh["rating"] > 0
-
-
-# ---------------- Account ----------------
-class TestAccount:
-    def test_update_profile(self, customer):
-        r = customer.put(f"{API}/account/profile", json={"name": "TEST Updated", "phone": "11999"})
-        assert r.status_code == 200
-        assert r.json()["name"] == "TEST Updated"
-        assert r.json()["phone"] == "11999"
-
-    def test_change_password_and_revert(self, customer):
-        r = customer.put(f"{API}/account/password", json={
-            "current_password": customer.password, "new_password": "novasenha123",
-        })
-        assert r.status_code == 200
-        # revert
-        r2 = customer.put(f"{API}/account/password", json={
-            "current_password": "novasenha123", "new_password": customer.password,
-        })
-        assert r2.status_code == 200
-
-    def test_addresses_crud(self, customer):
-        payload = {
-            "label": "Casa", "recipient": "TEST", "street": "R", "number": "1",
-            "district": "D", "city": "C", "state": "SP", "zip": "01000-000", "is_default": True,
-        }
-        add = customer.post(f"{API}/account/addresses", json=payload)
-        assert add.status_code == 200
-        addrs = add.json()
-        assert len(addrs) >= 1
-        aid = addrs[-1]["id"]
-        lst = customer.get(f"{API}/account/addresses")
-        assert lst.status_code == 200
-        rm = customer.delete(f"{API}/account/addresses/{aid}")
-        assert rm.status_code == 200
-        assert not any(a["id"] == aid for a in rm.json())
-
-
-# ---------------- Admin RBAC + CRUD ----------------
-class TestAdmin:
-    def test_customer_forbidden(self, customer):
-        r = customer.get(f"{API}/admin/stats")
+    def test_admin_stats_customer_forbidden(self, customer_session):
+        r = customer_session.get(f"{BASE_URL}/api/admin/stats", timeout=15)
         assert r.status_code == 403
 
-    def test_stats(self, admin_sess):
-        r = admin_sess.get(f"{API}/admin/stats")
+    def test_admin_stats_ok(self, admin_session):
+        r = admin_session.get(f"{BASE_URL}/api/admin/stats", timeout=15)
         assert r.status_code == 200
-        d = r.json()
-        for k in ["total_products", "total_orders", "total_customers", "revenue", "low_stock", "revenue_series", "recent_orders"]:
-            assert k in d
+        for k in ("total_products", "total_orders", "total_customers",
+                  "revenue", "low_stock", "revenue_series", "recent_orders"):
+            assert k in r.json()
 
-    def test_admin_lists(self, admin_sess):
-        for path in ["/admin/products", "/admin/orders", "/admin/customers", "/admin/banners"]:
-            r = admin_sess.get(f"{API}{path}")
-            assert r.status_code == 200, f"{path} -> {r.status_code}"
 
-    def test_product_crud(self, admin_sess):
+# ---------- Coupons ----------
+class TestCoupons:
+    @pytest.mark.parametrize("code", ["BRASIL10", "MINIS20", "FRETEGRATIS"])
+    def test_valid_coupons(self, code):
+        r = requests.post(f"{BASE_URL}/api/coupons/validate", json={"code": code}, timeout=15)
+        assert r.status_code == 200, f"{code} -> {r.status_code} {r.text}"
+        assert r.json()["code"].upper() == code
+
+    def test_invalid_coupon(self):
+        r = requests.post(f"{BASE_URL}/api/coupons/validate", json={"code": "BOGUSCODE"}, timeout=15)
+        assert r.status_code == 400
+
+
+# ---------- Orders + Atomic Stock ----------
+class TestOrders:
+    def _pick_product(self, min_stock=3):
+        items = requests.get(f"{BASE_URL}/api/products?limit=50", timeout=15).json()["items"]
+        for p in items:
+            if p["stock"] >= min_stock:
+                return p
+        pytest.skip("No product with sufficient stock")
+
+    def test_create_order_and_stock_decrement(self, customer_session):
+        product = self._pick_product(min_stock=3)
+        pid = product["id"]
+        stock_before = product["stock"]
         payload = {
-            "name": f"TEST Product {uuid.uuid4().hex[:6]}",
-            "description": "Test", "price": 199.9, "category": "carros",
-            "group": "miniaturas", "brand": "", "images": ["https://x/y.jpg"],
-            "stock": 10, "badges": [], "specs": {}, "featured": False, "is_active": True,
+            "items": [{"product_id": pid, "quantity": 2}],
+            "shipping_method": "standard",
+            "payment_method": "pix",
         }
-        r = admin_sess.post(f"{API}/admin/products", json=payload)
+        r = customer_session.post(f"{BASE_URL}/api/orders", json=payload, timeout=30)
         assert r.status_code == 200, r.text
-        prod = r.json()
-        pid = prod["id"]
-        # update
-        payload["price"] = 149.9
-        payload["name"] = prod["name"]
-        u = admin_sess.put(f"{API}/admin/products/{pid}", json=payload)
-        assert u.status_code == 200 and u.json()["price"] == 149.9
-        # delete
-        d = admin_sess.delete(f"{API}/admin/products/{pid}")
-        assert d.status_code == 200
+        body = r.json()
+        assert body["status"] == "confirmado"
+        assert body["payment_status"] == "paid_simulated"
+        assert "payment" in body
+        # Verify stock decrement
+        after = requests.get(f"{BASE_URL}/api/products/{product['slug']}", timeout=15).json()
+        assert after["stock"] == stock_before - 2, f"Expected {stock_before - 2}, got {after['stock']}"
 
-    def test_category_and_brand_and_banner_lifecycle(self, admin_sess):
-        cat = admin_sess.post(f"{API}/admin/categories", json={
-            "name": f"TEST Cat {uuid.uuid4().hex[:5]}", "group": "miniaturas",
-        })
-        assert cat.status_code == 200
-        cid = cat.json()["id"]
-        admin_sess.delete(f"{API}/admin/categories/{cid}")
+    def test_oversell_rejected(self, customer_session):
+        product = self._pick_product(min_stock=1)
+        stock_before = product["stock"]
+        payload = {
+            "items": [{"product_id": product["id"], "quantity": stock_before + 100}],
+            "shipping_method": "standard",
+            "payment_method": "pix",
+        }
+        r = customer_session.post(f"{BASE_URL}/api/orders", json=payload, timeout=30)
+        assert r.status_code == 400
+        assert "estoque" in r.json()["detail"].lower()
+        after = requests.get(f"{BASE_URL}/api/products/{product['slug']}", timeout=15).json()
+        assert after["stock"] == stock_before, "Stock changed after failed oversell"
 
-        br = admin_sess.post(f"{API}/admin/brands", json={
-            "name": f"TEST Brand {uuid.uuid4().hex[:5]}",
-        })
-        assert br.status_code == 200
-        bid = br.json()["id"]
-        admin_sess.delete(f"{API}/admin/brands/{bid}")
+    def test_concurrent_no_negative_stock(self, customer_session):
+        product = self._pick_product(min_stock=2)
+        pid = product["id"]
+        slug = product["slug"]
+        stock_before = product["stock"]
 
-        bn = admin_sess.post(f"{API}/admin/banners", json={
-            "title": "TEST Banner", "image": "https://x/y.jpg", "position": 99, "active": True,
-        })
-        assert bn.status_code == 200
-        bnid = bn.json()["id"]
-        d = admin_sess.delete(f"{API}/admin/banners/{bnid}")
-        assert d.status_code == 200
+        # Try to order (stock_before) items in parallel across N sessions
+        # Only 1 should succeed if we buy full stock each; here we buy 1 each in N>>stock threads
+        N = stock_before + 5
 
-    def test_update_order_status(self, admin_sess):
-        orders = admin_sess.get(f"{API}/admin/orders").json()
-        if not orders:
-            pytest.skip("no orders yet")
-        oid = orders[0]["id"]
-        r = admin_sess.put(f"{API}/admin/orders/{oid}/status", json={"status": "enviado"})
+        def _place():
+            s = requests.Session()
+            s.post(f"{BASE_URL}/api/auth/login",
+                   json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=15)
+            # admin can also order
+            return s.post(f"{BASE_URL}/api/orders", json={
+                "items": [{"product_id": pid, "quantity": 1}],
+                "shipping_method": "standard", "payment_method": "pix",
+            }, timeout=30).status_code
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(N, 10)) as ex:
+            statuses = list(ex.map(lambda _: _place(), range(N)))
+        successes = sum(1 for s in statuses if s == 200)
+        # Not more successes than initial stock
+        assert successes <= stock_before, f"successes={successes} stock_before={stock_before}"
+        after = requests.get(f"{BASE_URL}/api/products/{slug}", timeout=15).json()
+        assert after["stock"] >= 0, f"Negative stock! {after['stock']}"
+        assert after["stock"] == stock_before - successes
+
+    def test_order_with_coupon_and_shipping(self, customer_session):
+        # Build cart that surpasses R$300 to trigger FRETEGRATIS/free shipping via total
+        items = requests.get(f"{BASE_URL}/api/products?limit=50", timeout=15).json()["items"]
+        # Pick a high-priced item with stock
+        item = next((p for p in items if p["price"] >= 150 and p["stock"] >= 3), None)
+        if not item:
+            pytest.skip("no suitable product")
+        payload = {
+            "items": [{"product_id": item["id"], "quantity": 3}],
+            "shipping_method": "standard",
+            "payment_method": "pix",
+            "coupon": "BRASIL10",
+        }
+        r = customer_session.post(f"{BASE_URL}/api/orders", json=payload, timeout=30)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["coupon"] == "BRASIL10"
+        assert body["discount"] > 0
+        # subtotal - discount >= 300 -> free shipping
+        if body["subtotal"] - body["discount"] >= 300:
+            assert body["shipping"] == 0.0
+        else:
+            assert body["shipping"] == 29.9
+
+    def test_empty_cart_rejected(self, customer_session):
+        r = customer_session.post(f"{BASE_URL}/api/orders", json={"items": []}, timeout=15)
+        assert r.status_code in (400, 422)
+
+    def test_my_orders(self, customer_session):
+        r = customer_session.get(f"{BASE_URL}/api/orders", timeout=15)
         assert r.status_code == 200
-        assert r.json()["status"] == "enviado"
+        assert isinstance(r.json(), list)
+
+
+# ---------- Account ----------
+class TestAccount:
+    def test_update_profile(self, customer_session):
+        r = customer_session.put(f"{BASE_URL}/api/account/profile",
+                                 json={"name": "Nome Atualizado", "phone": "11999999999"},
+                                 timeout=15)
+        assert r.status_code == 200
+        assert r.json()["name"] == "Nome Atualizado"
+
+    def test_wrong_current_password(self, customer_session):
+        r = customer_session.put(f"{BASE_URL}/api/account/password",
+                                 json={"current_password": "wrongpwd", "new_password": "novasenha1"},
+                                 timeout=15)
+        assert r.status_code == 400
+
+    def test_address_flow(self, customer_session):
+        # Start clean
+        addrs = customer_session.get(f"{BASE_URL}/api/account/addresses", timeout=15).json()
+        for a in addrs:
+            customer_session.delete(f"{BASE_URL}/api/account/addresses/{a['id']}", timeout=15)
+
+        payload = {
+            "label": "Casa", "recipient": "Fulano", "street": "Rua X", "number": "10",
+            "district": "Centro", "city": "SP", "state": "SP", "zip": "01000-000",
+        }
+        r = customer_session.post(f"{BASE_URL}/api/account/addresses", json=payload, timeout=15)
+        assert r.status_code == 200
+        addrs = r.json()
+        assert len(addrs) == 1
+        assert addrs[0]["is_default"] is True  # first becomes default
+
+        # Delete
+        aid = addrs[0]["id"]
+        r2 = customer_session.delete(f"{BASE_URL}/api/account/addresses/{aid}", timeout=15)
+        assert r2.status_code == 200
+        assert r2.json() == []
+
+
+# ---------- Favorites ----------
+class TestFavorites:
+    def test_favorites_idempotent(self, customer_session):
+        pid = requests.get(f"{BASE_URL}/api/products?limit=1", timeout=15).json()["items"][0]["id"]
+        r1 = customer_session.post(f"{BASE_URL}/api/favorites/{pid}", timeout=15)
+        r2 = customer_session.post(f"{BASE_URL}/api/favorites/{pid}", timeout=15)
+        assert r1.status_code == 200 and r2.status_code == 200
+        favs = customer_session.get(f"{BASE_URL}/api/favorites", timeout=15).json()
+        assert any(p["id"] == pid for p in favs)
+        # delete twice idempotent
+        d1 = customer_session.delete(f"{BASE_URL}/api/favorites/{pid}", timeout=15)
+        d2 = customer_session.delete(f"{BASE_URL}/api/favorites/{pid}", timeout=15)
+        assert d1.status_code == 200 and d2.status_code == 200
+
+
+# ---------- Reviews ----------
+class TestReviews:
+    def test_review_recomputes_rating(self, customer_session):
+        pid = requests.get(f"{BASE_URL}/api/products?limit=1", timeout=15).json()["items"][0]["id"]
+        r = customer_session.post(f"{BASE_URL}/api/products/{pid}/reviews",
+                                  json={"rating": 5, "comment": "TEST review"}, timeout=15)
+        assert r.status_code == 200
+        # Fetch product
+        prod = None
+        for p in requests.get(f"{BASE_URL}/api/products?limit=50", timeout=15).json()["items"]:
+            if p["id"] == pid:
+                prod = p
+                break
+        assert prod is not None
+        assert prod["reviews_count"] >= 1
+        assert prod["rating"] >= 1
+
+    def test_review_requires_auth(self):
+        pid = requests.get(f"{BASE_URL}/api/products?limit=1", timeout=15).json()["items"][0]["id"]
+        r = requests.post(f"{BASE_URL}/api/products/{pid}/reviews",
+                          json={"rating": 5, "comment": "x"}, timeout=15)
+        assert r.status_code == 401
+
+
+# ---------- Admin CRUD ----------
+class TestAdminCRUD:
+    def test_product_crud(self, admin_session):
+        name = f"TEST Produto {uuid.uuid4().hex[:6]}"
+        create = admin_session.post(f"{BASE_URL}/api/admin/products", json={
+            "name": name, "description": "d", "price": 9.9,
+            "category": "mochilas", "images": [], "stock": 5, "badges": [], "specs": {},
+        }, timeout=15)
+        assert create.status_code == 200, create.text
+        pid = create.json()["id"]
+        assert create.json()["slug"]  # slug auto-generated
+
+        upd = admin_session.put(f"{BASE_URL}/api/admin/products/{pid}", json={
+            "name": name + " v2", "description": "d", "price": 19.9,
+            "category": "mochilas", "images": [], "stock": 8, "badges": [], "specs": {},
+        }, timeout=15)
+        assert upd.status_code == 200
+        assert upd.json()["price"] == 19.9
+
+        dele = admin_session.delete(f"{BASE_URL}/api/admin/products/{pid}", timeout=15)
+        assert dele.status_code == 200
+
+    def test_admin_orders_and_customers(self, admin_session):
+        r = admin_session.get(f"{BASE_URL}/api/admin/orders", timeout=15)
+        assert r.status_code == 200 and isinstance(r.json(), list)
+        r2 = admin_session.get(f"{BASE_URL}/api/admin/customers", timeout=15)
+        assert r2.status_code == 200 and isinstance(r2.json(), list)
+        if r2.json():
+            assert "orders_count" in r2.json()[0]
+
+    def test_banner_crud(self, admin_session):
+        create = admin_session.post(f"{BASE_URL}/api/admin/banners", json={
+            "title": "TEST Banner", "image": "https://x/y.jpg", "position": 99, "active": True,
+        }, timeout=15)
+        assert create.status_code == 200
+        bid = create.json()["id"]
+        dele = admin_session.delete(f"{BASE_URL}/api/admin/banners/{bid}", timeout=15)
+        assert dele.status_code == 200

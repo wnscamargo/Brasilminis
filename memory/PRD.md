@@ -81,3 +81,26 @@ Arquivos modificados/criados (branch laravel-migration):
 Regras respeitadas: sem novas features, sem mudança de layout, Mercado Pago NÃO ativado, sem merge na main.
 Pendências do usuário: (1) gerar `composer.lock` localmente e commitar; (2) configurar os 6 Secrets; (3) Save to Github na branch laravel-migration.
 Validação: YAML e bash validados no ambiente. PHP/rsync/SSH não executáveis aqui (sem runtime) → homologação real na Locaweb pelo usuário.
+
+---
+## Retomada Python/FastAPI + React (VPS) — Junho/2026
+Decisão do usuário: abandonar Laravel/PHP; consolidar Python/FastAPI + React em VPS Ubuntu 24.04. Persistência migrada de MongoDB → **PostgreSQL + SQLAlchemy + Alembic**. Frontend mantido (CRA + JS). Pagamento MOCK. Recomeço com seed.
+
+### Concluído e TESTADO (41/41 pytest + smoke HTTPS + screenshot)
+- Backend reescrito na estrutura modular `backend/app/`: `core/` (config, security JWT+bcrypt), `db/` (engine/session/base), `models/` (ORM PostgreSQL, JSONB, CHECK stock>=0), `schemas/` (Pydantic), `dependencies/` (get_db, get_current_user, get_current_admin), `routers/` (auth, catalog, orders, account, favorites, reviews, banners, admin), `services/` (order c/ baixa ATÔMICA via with_for_update, coupon, shipping, payment mock), `seed.py`.
+- Contrato REST idêntico → frontend React não alterado e funcionando.
+- `backend/server.py` mantido como entrypoint do supervisor (importa `app.main:app`).
+- Alembic configurado + migração inicial `ea44b6ac0765` (12 tabelas) aplicada. `AUTO_CREATE_TABLES=true` só em preview.
+- PostgreSQL 15 local no container (auto-start via supervisor) + DATABASE_URL no `.env`.
+- Removidos os arquivos Mongo antigos (`db.py, deps.py, security.py, models.py, seed.py, utils.py, routers/, tests/` antigos) — preservados no histórico git.
+- Fix de segurança (achado pelo testing agent): brute force agora usa `X-Forwarded-For` (ingress K8s) e só trava ao atingir 5 tentativas → 429 (verificado).
+
+### Pendente (próximas fases)
+- Fase 0 (git): usuário arquiva Laravel numa branch/tag (`archive/laravel`) e então autoriza a remoção de `/app/laravel` + workflow Locaweb `.github/workflows/deploy.yml` + `docs/MIGRATION_PHASE1_INVENTORY.md` na branch `python-vps`.
+- Fase 6 (infra VPS): `infra/nginx/brasilminis.conf`, `infra/systemd/brasilminis-backend.service` (Gunicorn+UvicornWorker), `infra/deploy.sh`, guia Let's Encrypt.
+- Fase 7 (evoluções): SKU, código de barras, peso/dimensões, histórico de estoque/status, Correios/Melhor Envio, Mercado Pago real.
+
+### Arquivos de referência (novos)
+- `backend/app/**`, `backend/alembic/**`, `backend/alembic.ini`, `backend/server.py`
+- `docs/RETOMADA_PYTHON_ANALISE.md` (análise completa das 9 entregas)
+- `memory/test_credentials.md`, `auth_testing.md`
