@@ -48,7 +48,10 @@ class TestHealth:
     def test_health(self):
         r = requests.get(f"{BASE_URL}/api/health", timeout=15)
         assert r.status_code == 200
-        assert r.json() == {"status": "ok"}
+        body = r.json()
+        assert body["status"] == "ok"
+        assert body["database"] == "ok"
+        assert body["migration"] == "current"
 
     def test_root(self):
         r = requests.get(f"{BASE_URL}/api/", timeout=15)

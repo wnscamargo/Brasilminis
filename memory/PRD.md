@@ -117,3 +117,12 @@ Arquivos criados:
 - `backend/.env.example` — placeholders de produção (APP_ENV=production, DEBUG=false, AUTO_CREATE_TABLES=false, CORS só domínios oficiais). Nenhum segredo real.
 Regra: Mercado Pago/Correios/Melhor Envio/histórico de status NÃO implementados nesta fase (estabilizar VPS primeiro). Histórico de status: APROVADO para depois.
 Pendências git (usuário): (1) confirmar archive/laravel; (2) autorizar remoção de laravel/ + workflow Locaweb + docs/MIGRATION_PHASE1_INVENTORY.md na branch python-vps.
+
+---
+## Limpeza branch python-vps + health check + smoke-test deploy — Junho/2026
+- REMOVIDOS (branch python-vps; archive/laravel preservada pelo usuário): `/app/laravel` (todo), `.github/workflows/deploy.yml` (Locaweb), `docs/MIGRATION_PHASE1_INVENTORY.md`. Nenhum arquivo Python/FastAPI/React afetado (backend/app = 26 .py intactos). Sem force push / sem reescrever histórico.
+- `/api/health` evoluído (app/main.py): retorna {status, database, migration} — 200 saudável / 503 se banco indisponível. Checa SELECT 1 + compara revisão Alembic atual vs head. Não expõe segredos/stack/infra. Verificado 200 e 503.
+- Startup do backend agora é resiliente: aguarda o banco (retry) e sobe em modo degradado (health 503) em vez de crashar; seed/create_all protegidos.
+- `infra/scripts/deploy.sh`: smoke-test pós-deploy — após restart, faz polling em /api/health; só conclui se status ok; em falha faz rollback SEGURO só do FRONTEND (restaura build anterior, guarda build_failed), loga motivo e o SHA anterior p/ rollback manual de código; NÃO faz rollback de migration nem restore de banco.
+- Preview infra: PostgreSQL é efêmero entre reinícios de pod. Adicionados `backend/scripts/ensure_db.sh` (recria role/DB idempotente) + supervisor `pg-bootstrap` para o backend reconectar após restart. (Só preview; VPS persiste.)
+- Testes: 41/41 pytest PASS (test_health atualizado p/ novo contrato). Fluxos HTTPS revalidados: health, login admin, RBAC (401 anon / 403 cliente / 200 admin), pedido com cupom+frete e baixa atômica (50→47), estoque insuficiente => 400 sem baixar. Banco de preview resetado ao seed limpo (28 produtos).
