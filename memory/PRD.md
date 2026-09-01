@@ -104,3 +104,16 @@ Decisão do usuário: abandonar Laravel/PHP; consolidar Python/FastAPI + React e
 - `backend/app/**`, `backend/alembic/**`, `backend/alembic.ini`, `backend/server.py`
 - `docs/RETOMADA_PYTHON_ANALISE.md` (análise completa das 9 entregas)
 - `memory/test_credentials.md`, `auth_testing.md`
+
+---
+## Infra de produção VPS (Ubuntu 24.04) — Junho/2026
+Gerada (não-destrutiva). Laravel AINDA presente — remoção condicionada à confirmação do usuário de que criou a branch/tag `archive/laravel`.
+Arquivos criados:
+- `infra/nginx/brasilminis.conf` — SPA em / + proxy /api -> 127.0.0.1:8000; gzip; cache de assets; SPA fallback; HTTPS; **anti-spoofing**: sobrescreve X-Forwarded-For com $remote_addr (não anexa) + X-Real-IP + X-Forwarded-Proto.
+- `infra/systemd/brasilminis-backend.service` — Gunicorn+UvicornWorker (`server:app`), user `brasilminis` (não-root), autostart/restart, EnvironmentFile, hardening.
+- `infra/scripts/deploy.sh` — set -euo pipefail; git pull ff-only (sem reset/force); pip; `alembic upgrade head`; build isolado (BUILD_PATH=build_new, promoção atômica; build falho não derruba versão); restart backend; nginx -t + reload. Sem seed automático, sem reset de banco, preserva .env/uploads.
+- `infra/scripts/backup-db.sh` — pg_dump | gzip timestampado + retenção (RETENTION_DAYS). `infra/scripts/restore-db.sh` — manual, destrutivo, exige digitar RESTAURAR.
+- `infra/docs/VPS_DEPLOY.md` — passo a passo 1..25 (usuário, UFW 22/80/443, Nginx, Python 3.12, PostgreSQL local, Node, Git, venv, .env, DB, Alembic, build, systemd, Certbot, homologação).
+- `backend/.env.example` — placeholders de produção (APP_ENV=production, DEBUG=false, AUTO_CREATE_TABLES=false, CORS só domínios oficiais). Nenhum segredo real.
+Regra: Mercado Pago/Correios/Melhor Envio/histórico de status NÃO implementados nesta fase (estabilizar VPS primeiro). Histórico de status: APROVADO para depois.
+Pendências git (usuário): (1) confirmar archive/laravel; (2) autorizar remoção de laravel/ + workflow Locaweb + docs/MIGRATION_PHASE1_INVENTORY.md na branch python-vps.

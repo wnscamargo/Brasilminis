@@ -1,0 +1,43 @@
+# Brasil Minis — FastAPI backend via Gunicorn + Uvicorn workers (systemd)
+# Instalar em: /etc/systemd/system/brasilminis-backend.service
+#
+# Usa o entrypoint `server:app` (server.py carrega o .env antes de importar app.main),
+# então NÃO dependemos do parser de EnvironmentFile — mas ele fica como reforço.
+#
+# Ativar:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now brasilminis-backend
+#   sudo systemctl status brasilminis-backend
+
+[Unit]
+Description=Brasil Minis FastAPI (Gunicorn/Uvicorn)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=notify
+User=brasilminis
+Group=brasilminis
+WorkingDirectory=/var/www/brasilminis/backend
+EnvironmentFile=/var/www/brasilminis/backend/.env
+ExecStart=/var/www/brasilminis/backend/.venv/bin/gunicorn server:app \
+    -k uvicorn.workers.UvicornWorker \
+    --workers 2 \
+    --bind 127.0.0.1:8000 \
+    --timeout 60 \
+    --access-logfile - \
+    --error-logfile -
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RestartSec=3
+KillMode=mixed
+TimeoutStopSec=30
+
+# Hardening básico
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
