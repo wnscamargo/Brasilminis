@@ -7,11 +7,9 @@ export const BRAND = {
   medGray: "#2E2E2E",
 };
 
-// Logo assets (solid dark #111111 background so they blend into the header/footer)
-export const LOGO_HEADER =
-  "https://static.prod-images.emergentagent.com/jobs/2d012ce5-70bf-425e-88f8-05a40f9c01ee/images/8b98c77a1247ca88c24e650d4638147cdf835d95c6364f87e60335ef37a48264.jpeg";
-export const LOGO_EMBLEM =
-  "https://static.prod-images.emergentagent.com/jobs/2d012ce5-70bf-425e-88f8-05a40f9c01ee/images/972271557c7ccee63b81cb7ef5bb0ef1cbdb9480f6647c66231007439f3b95bd.jpeg";
+// Logo oficial Brasil Minis (PNG com fundo transparente, servido de /public).
+export const LOGO_HEADER = "/brasil-minis-logo.png";
+export const LOGO_EMBLEM = "/brasil-minis-logo.png";
 
 export const MENU = [
   { label: "Início", to: "/" },

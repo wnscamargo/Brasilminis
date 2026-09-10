@@ -82,9 +82,10 @@ app.add_middleware(
 @app.on_event("startup")
 def startup():
     import time
+    from sqlalchemy import inspect as sa_inspect
 
     # Aguarda o banco ficar disponível (em preview o Postgres pode subir logo após).
-    for _ in range(15):
+    for _ in range(20):
         try:
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
@@ -96,16 +97,32 @@ def startup():
         logger.error("Banco indisponível no startup — app em modo degradado (health 503).")
         return
 
-    try:
-        # Preview/dev: cria tabelas automaticamente. Produção (VPS): use Alembic.
-        if settings.AUTO_CREATE_TABLES:
+    # Fallback opcional (NUNCA usar em produção multi-worker). Migrations = Alembic.
+    if settings.AUTO_CREATE_TABLES:
+        try:
             Base.metadata.create_all(bind=engine)
+        except Exception:
+            pass
+
+    # Aguarda as migrations serem aplicadas (deploy.sh na VPS / pg-bootstrap no preview).
+    for _ in range(20):
+        try:
+            if sa_inspect(engine).has_table("users"):
+                break
+        except Exception:
+            pass
+        time.sleep(2)
+    else:
+        logger.error("Tabelas ausentes (migrations não aplicadas) — modo degradado.")
+        return
+
+    try:
         db = SessionLocal()
         try:
             seed_admin(db)
             seed_data(db)
-            logger.info("Startup concluído: admin e seed verificados.")
+            logger.info("Startup concluído: seed verificado.")
         finally:
             db.close()
     except Exception as exc:
-        logger.error("Falha ao criar tabelas/seed: %s", type(exc).__name__)
+        logger.error("Falha no seed: %s", type(exc).__name__)

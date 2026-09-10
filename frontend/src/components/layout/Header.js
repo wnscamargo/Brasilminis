@@ -35,8 +35,14 @@ export default function Header() {
               {open ? <X size={26} /> : <Menu size={26} />}
             </button>
 
-            <Link to="/" data-testid="logo-link" className="shrink-0">
-              <img src={LOGO_HEADER} alt="Brasil Minis" className="h-11 w-auto object-contain" />
+            <Link to="/" data-testid="logo-link" className="shrink-0" aria-label="Brasil Minis | Miniaturas Diecast">
+              <img
+                src={LOGO_HEADER}
+                alt="Brasil Minis - Miniaturas e Diecast"
+                className="h-12 md:h-16 w-auto object-contain"
+                loading="eager"
+                decoding="async"
+              />
             </Link>
 
             <form onSubmit={submitSearch} className="hidden md:flex flex-1 max-w-xl mx-4 relative">

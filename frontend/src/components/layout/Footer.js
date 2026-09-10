@@ -50,7 +50,7 @@ export default function Footer() {
 
       <div className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-12 grid grid-cols-2 md:grid-cols-4 gap-8">
         <div className="col-span-2 md:col-span-1">
-          <img src={LOGO_HEADER} alt="Brasil Minis" className="h-10 w-auto mb-4" />
+          <img src={LOGO_HEADER} alt="Brasil Minis - Miniaturas e Diecast" className="h-16 w-auto object-contain mb-4" />
           <p className="text-sm text-gray-500 leading-relaxed">
             Sua paixão em miniatura. As melhores marcas e edições exclusivas do universo automotivo.
           </p>

@@ -126,3 +126,11 @@ Pendências git (usuário): (1) confirmar archive/laravel; (2) autorizar remoç�
 - `infra/scripts/deploy.sh`: smoke-test pós-deploy — após restart, faz polling em /api/health; só conclui se status ok; em falha faz rollback SEGURO só do FRONTEND (restaura build anterior, guarda build_failed), loga motivo e o SHA anterior p/ rollback manual de código; NÃO faz rollback de migration nem restore de banco.
 - Preview infra: PostgreSQL é efêmero entre reinícios de pod. Adicionados `backend/scripts/ensure_db.sh` (recria role/DB idempotente) + supervisor `pg-bootstrap` para o backend reconectar após restart. (Só preview; VPS persiste.)
 - Testes: 41/41 pytest PASS (test_health atualizado p/ novo contrato). Fluxos HTTPS revalidados: health, login admin, RBAC (401 anon / 403 cliente / 200 admin), pedido com cupom+frete e baixa atômica (50→47), estoque insuficiente => 400 sem baixar. Banco de preview resetado ao seed limpo (28 produtos).
+
+---
+## Nova identidade visual (logo + favicon) — Junho/2026
+- Logo oficial (imagem enviada: VW azul + bandeira do Brasil + "BRASIL MINIS DIECAST") aplicada. Fundo preto tornado TRANSPARENTE via flood-fill pelas bordas (preserva pretos internos; sem redesenhar/cortar conteúdo), margens vazias aparadas. Salvo em `frontend/public/brasil-minis-logo.png` (936×1196, transparente).
+- Substituída em: Header (`h-12 md:h-16`, object-contain, link para /, alt "Brasil Minis - Miniaturas e Diecast"), Footer, Login e AdminLayout (object-cover → object-contain p/ não cortar). `lib/brand.js` LOGO_HEADER/LOGO_EMBLEM → "/brasil-minis-logo.png".
+- Favicons gerados (Pillow): favicon.ico (16/32/48), favicon-32x32.png, apple-touch-icon.png (180), logo192/512.png. `public/index.html` com <link> icon/apple-touch/manifest + theme-color #111111; `public/manifest.json` criado. Todos servindo HTTP 200.
+- Sem mudanças em funcionalidades/catálogo/carrinho/checkout/auth/admin. `/api/health` segue 200.
+- Ajuste de infra preview: `AUTO_CREATE_TABLES=false`; `ensure_db.sh` agora aplica `alembic upgrade head` (fallback `stamp head`) para o health reportar migration=current após reinício de pod; startup do backend espera as tabelas antes do seed.
