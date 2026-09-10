@@ -55,7 +55,7 @@ if command -v yarn >/dev/null 2>&1 && [ -f yarn.lock ]; then
     rm -rf build_new
     BUILD_PATH=build_new yarn build
 else
-    npm install
+    npm install --legacy-peer-deps
     rm -rf build_new
     BUILD_PATH=build_new npm run build
 fi
