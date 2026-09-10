@@ -25,7 +25,7 @@ export default function Header() {
       <div className="bm-glass">
         <div className="max-w-[1400px] mx-auto px-4 lg:px-8">
           {/* top row */}
-          <div className="flex items-center gap-4 h-20">
+          <div className="flex items-center gap-4 h-20 md:h-24">
             <button
               className="lg:hidden text-white"
               onClick={() => setOpen(!open)}
@@ -39,7 +39,7 @@ export default function Header() {
               <img
                 src={LOGO_HEADER}
                 alt="Brasil Minis - Miniaturas e Diecast"
-                className="h-12 md:h-16 w-auto object-contain"
+                className="h-16 md:h-24 w-auto object-contain"
                 loading="eager"
                 decoding="async"
               />
