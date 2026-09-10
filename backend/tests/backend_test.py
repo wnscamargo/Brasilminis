@@ -428,3 +428,49 @@ class TestAdminCRUD:
         bid = create.json()["id"]
         dele = admin_session.delete(f"{BASE_URL}/api/admin/banners/{bid}", timeout=15)
         assert dele.status_code == 200
+
+
+class TestSiteMaintenance:
+    def test_public_status_open(self):
+        r = requests.get(f"{BASE_URL}/api/site-status", timeout=15)
+        assert r.status_code == 200
+        assert "maintenance_enabled" in r.json()
+
+    def test_customer_forbidden(self, customer_session):
+        assert customer_session.get(f"{BASE_URL}/api/admin/site-settings", timeout=15).status_code == 403
+        assert customer_session.put(f"{BASE_URL}/api/admin/site-settings", json={"maintenance_enabled": True}, timeout=15).status_code == 403
+
+    def test_admin_get_settings(self, admin_session):
+        r = admin_session.get(f"{BASE_URL}/api/admin/site-settings", timeout=15)
+        assert r.status_code == 200
+        assert "maintenance_enabled" in r.json()
+
+    def test_invalid_url_rejected(self, admin_session):
+        r = admin_session.put(f"{BASE_URL}/api/admin/site-settings",
+                              json={"maintenance_enabled": False, "whatsapp_url": "javascript:alert(1)"}, timeout=15)
+        assert r.status_code == 422
+
+    def test_enable_reflects_and_disable(self, admin_session):
+        try:
+            up = admin_session.put(f"{BASE_URL}/api/admin/site-settings", json={
+                "maintenance_enabled": True,
+                "maintenance_title": "TEST Manutenção",
+                "launch_date": "2027-01-01T00:00:00Z",
+                "show_countdown": True,
+                "whatsapp_url": "https://wa.me/5511999999999",
+                "show_whatsapp": True,
+            }, timeout=15)
+            assert up.status_code == 200 and up.json()["maintenance_enabled"] is True
+            pub = requests.get(f"{BASE_URL}/api/site-status", timeout=15).json()
+            assert pub["maintenance_enabled"] is True
+            assert pub["title"] == "TEST Manutenção"
+            assert pub["show_whatsapp"] is True and pub["whatsapp_url"]
+            # health não pode ser bloqueado durante manutenção
+            assert requests.get(f"{BASE_URL}/api/health", timeout=15).status_code == 200
+            # admin continua acessando durante manutenção
+            assert admin_session.get(f"{BASE_URL}/api/admin/stats", timeout=15).status_code == 200
+        finally:
+            back = admin_session.put(f"{BASE_URL}/api/admin/site-settings", json={"maintenance_enabled": False}, timeout=15)
+            assert back.status_code == 200 and back.json()["maintenance_enabled"] is False
+            assert requests.get(f"{BASE_URL}/api/site-status", timeout=15).json()["maintenance_enabled"] is False
+

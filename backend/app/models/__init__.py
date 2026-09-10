@@ -154,3 +154,21 @@ class LoginAttempt(Base):
     identifier = Column(String, primary_key=True)
     count = Column(Integer, default=0)
     locked_until = Column(String, nullable=True)
+
+
+class SiteSettings(Base):
+    """Configuração global do site (linha única, id=1). Modo 'em construção'."""
+    __tablename__ = "site_settings"
+    id = Column(Integer, primary_key=True, default=1)
+    maintenance_enabled = Column(Boolean, nullable=False, default=False)
+    maintenance_title = Column(String, default="Estamos preparando algo incrível")
+    maintenance_subtitle = Column(String, default="")
+    maintenance_message = Column(Text, default="")
+    launch_date = Column(String, nullable=True)  # ISO 8601
+    show_countdown = Column(Boolean, default=False)
+    whatsapp_url = Column(String, nullable=True)
+    instagram_url = Column(String, nullable=True)
+    show_whatsapp = Column(Boolean, default=False)
+    show_instagram = Column(Boolean, default=False)
+    updated_at = Column(String, nullable=True)
+    updated_by = Column(String, nullable=True)

@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend E2E testing of Site em Construção (maintenance mode). All 10 scenarios in the review request verified successfully on the HTTPS preview URL. Baseline OFF shows storefront; admin can toggle ON via /admin/site (dialog accepted); anonymous incognito context correctly sees UnderConstruction page on /, /produtos, /produto/<slug>; /login and /admin remain accessible during maintenance; countdown renders 4 units; WhatsApp/Instagram buttons have target=_blank rel=noopener noreferrer; /em-construcao?preview=1 works; toggling OFF + save immediately reverts for fresh anon visitor; customer role redirected away from /admin. Boot splash (data-testid boot-splash) detected during initial load, no flash-of-storefront observed. Maintenance is left DISABLED at end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/tmp/uc_test.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "MaintenanceGate.js correctly fails open on /site-status error (setStatus({maintenance_enabled:false})) — good resilience.",
+    "AdminSite.js sends launch_date as null when empty and trims URL fields to null — matches backend URL validation expectations.",
+    "UnderConstruction useCountdown recomputes via useMemo based on Date.now() interval — fine, though it's a minor unnecessary re-render every second when show_countdown=false with launchDate set (guarded correctly by early-return); no action needed."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@brasilminis.com / Admin@2025; created cliente_uc_test@teste.com / senha1234 via /api/auth/register",
+  "seed_data_creation": "Created customer cliente_uc_test@teste.com for the RBAC test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test script /tmp/uc_test.py drives the full flow end-to-end. Uses two separate browser contexts (admin + anon) to validate maintenance visibility rules. Left maintenance OFF at end. Login submit selector must be [data-testid=login-submit] (button has no explicit type=submit). Header has a search input, so 'input[type=email]' can match 2+ nodes on /login (still validates login form present)."
+}

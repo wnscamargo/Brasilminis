@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import hash_password, verify_password
-from app.models import Banner, Brand, Category, Coupon, Product, User
+from app.models import Banner, Brand, Category, Coupon, Product, SiteSettings, User
 from app.utils import slugify
 
 IMG = {
@@ -226,4 +226,12 @@ def seed_data(db: Session):
 
     if (db.query(func.count(Coupon.code)).scalar() or 0) == 0:
         db.add_all([Coupon(**c) for c in COUPONS])
+        db.commit()
+
+    # Garante a linha única de configuração do site (modo em construção desativado).
+    if db.get(SiteSettings, 1) is None:
+        db.add(SiteSettings(id=1, maintenance_enabled=False,
+                            maintenance_title="Estamos preparando algo incrível",
+                            maintenance_subtitle="A Brasil Minis está acelerando os últimos ajustes.",
+                            maintenance_message="Em breve, sua garagem de sonhos estará a poucos cliques de distância."))
         db.commit()

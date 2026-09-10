@@ -6,7 +6,9 @@ import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { FavoritesProvider } from "@/context/FavoritesContext";
 import { ProtectedRoute, ScrollToTop } from "@/components/Guards";
+import MaintenanceGate from "@/components/MaintenanceGate";
 import Layout from "@/components/layout/Layout";
+import UnderConstruction from "@/pages/UnderConstruction";
 
 import Home from "@/pages/Home";
 import Catalog from "@/pages/Catalog";
@@ -29,6 +31,7 @@ import AdminBrands from "@/pages/admin/AdminBrands";
 import AdminOrders from "@/pages/admin/AdminOrders";
 import AdminCustomers from "@/pages/admin/AdminCustomers";
 import AdminBanners from "@/pages/admin/AdminBanners";
+import AdminSite from "@/pages/admin/AdminSite";
 
 const Shell = ({ children }) => <Layout>{children}</Layout>;
 
@@ -41,6 +44,7 @@ function App() {
             <FavoritesProvider>
               <ScrollToTop />
               <Toaster theme="dark" position="top-right" richColors />
+              <MaintenanceGate>
               <Routes>
                 <Route path="/" element={<Shell><Home /></Shell>} />
                 <Route path="/produtos" element={<Shell><Catalog /></Shell>} />
@@ -51,6 +55,7 @@ function App() {
                 <Route path="/carrinho" element={<Shell><Cart /></Shell>} />
                 <Route path="/checkout" element={<Shell><Checkout /></Shell>} />
                 <Route path="/favoritos" element={<Shell><Favorites /></Shell>} />
+                <Route path="/em-construcao" element={<UnderConstruction />} />
                 <Route path="/login" element={<Shell><Login /></Shell>} />
                 <Route path="/cadastro" element={<Shell><Register /></Shell>} />
                 <Route path="/recuperar-senha" element={<Shell><ForgotPassword /></Shell>} />
@@ -70,8 +75,10 @@ function App() {
                   <Route path="pedidos" element={<AdminOrders />} />
                   <Route path="clientes" element={<AdminCustomers />} />
                   <Route path="banners" element={<AdminBanners />} />
+                  <Route path="site" element={<AdminSite />} />
                 </Route>
               </Routes>
+              </MaintenanceGate>
             </FavoritesProvider>
           </CartProvider>
         </AuthProvider>

@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 # ---------- Auth ----------
@@ -121,3 +121,27 @@ class BannerInput(BaseModel):
     cta_link: Optional[str] = ""
     position: int = 0
     active: bool = True
+
+
+# ---------- Site Settings (modo em construção) ----------
+class SiteSettingsInput(BaseModel):
+    maintenance_enabled: bool = False
+    maintenance_title: str = "Estamos preparando algo incrível"
+    maintenance_subtitle: Optional[str] = ""
+    maintenance_message: Optional[str] = ""
+    launch_date: Optional[str] = None
+    show_countdown: bool = False
+    whatsapp_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    show_whatsapp: bool = False
+    show_instagram: bool = False
+
+    @field_validator("whatsapp_url", "instagram_url")
+    @classmethod
+    def _validate_url(cls, v):
+        if v is None or v.strip() == "":
+            return None
+        v = v.strip()
+        if not (v.startswith("http://") or v.startswith("https://")):
+            raise ValueError("URL deve começar com http:// ou https://")
+        return v

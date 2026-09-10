@@ -134,3 +134,13 @@ Pendências git (usuário): (1) confirmar archive/laravel; (2) autorizar remoç�
 - Favicons gerados (Pillow): favicon.ico (16/32/48), favicon-32x32.png, apple-touch-icon.png (180), logo192/512.png. `public/index.html` com <link> icon/apple-touch/manifest + theme-color #111111; `public/manifest.json` criado. Todos servindo HTTP 200.
 - Sem mudanças em funcionalidades/catálogo/carrinho/checkout/auth/admin. `/api/health` segue 200.
 - Ajuste de infra preview: `AUTO_CREATE_TABLES=false`; `ensure_db.sh` agora aplica `alembic upgrade head` (fallback `stamp head`) para o health reportar migration=current após reinício de pod; startup do backend espera as tabelas antes do seed.
+
+---
+## Modo "Site em Construção" gerenciável pelo admin — Junho/2026
+Configuração persistente no PostgreSQL (linha única site_settings), gate anti-flash no frontend, página premium, controle total pelo admin. Sem migração de tecnologia.
+Backend (novos/alterados): `app/models/__init__.py` (+SiteSettings), `app/schemas/__init__.py` (+SiteSettingsInput c/ validação de URL), `app/services/site_service.py` (novo), `app/routers/site.py` (novo), `app/main.py` (inclui router site), `app/seed.py` (garante linha site_settings). Migration Alembic: `21a5e90c8117_site_settings.py`.
+Endpoints: GET /api/site-status (público, leve), GET/PUT /api/admin/site-settings (role admin; PUT valida URLs, grava updated_at/updated_by).
+Frontend (novos/alterados): `components/MaintenanceGate.js` (novo — fetch /site-status no boot, BootSplash, libera /login,/cadastro,/recuperar-senha,/reset-password,/em-construcao e prefixos /conta,/admin; bloqueia rotas públicas p/ não-admin; fail-open em erro), `pages/UnderConstruction.js` (novo — premium, countdown, WhatsApp/Instagram target=_blank rel=noopener), `pages/admin/AdminSite.js` (novo — toggle c/ confirmação, campos, salvar, "Visualizar página" /em-construcao?preview=1), `App.js` (MaintenanceGate envolve Routes; rota /em-construcao; child admin "site"), `pages/admin/AdminLayout.js` (item de menu "Site em Construção").
+Testes: `tests/backend_test.py` +TestSiteMaintenance (5 casos). Suíte: 46/46 pytest PASS. Frontend E2E (testing_agent): 100% (10/10 cenários), 0 issues.
+Comportamento validado: OFF→storefront normal; ON→visitante anônimo vê construção em /, /produtos, /produto/:slug; /login e /admin não bloqueados; countdown; preview; sem redirect loop; revert imediato; health nunca bloqueado; customer não acessa config (403). Efeito imediato (sem restart/rebuild). Estado final: manutenção DESATIVADA.
+Deploy VPS: o `deploy.sh` já roda `alembic upgrade head` (aplica a nova migration) + rebuild do frontend. Nenhum passo extra.

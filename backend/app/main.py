@@ -13,7 +13,7 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.dependencies import get_db  # noqa: F401  (garante import do pacote)
 from app import models  # noqa: F401  (registra os modelos no metadata)
-from app.routers import account, admin, auth, banners, catalog, favorites, orders, reviews
+from app.routers import account, admin, auth, banners, catalog, favorites, orders, reviews, site
 from app.seed import seed_admin, seed_data
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -30,6 +30,7 @@ app.include_router(favorites.router)
 app.include_router(orders.router)
 app.include_router(account.router)
 app.include_router(banners.router)
+app.include_router(site.router)
 app.include_router(admin.router)
 
 
