@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, Heart, ShoppingCart, User, Menu, X } from "lucide-react";
-import { LOGO_HEADER, MENU } from "@/lib/brand";
+import { MENU } from "@/lib/brand";
+import BrandLogo from "@/components/BrandLogo";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { useFavorites } from "@/context/FavoritesContext";
@@ -36,13 +37,7 @@ export default function Header() {
             </button>
 
             <Link to="/" data-testid="logo-link" className="shrink-0" aria-label="Brasil Minis | Miniaturas Diecast">
-              <img
-                src={LOGO_HEADER}
-                alt="Brasil Minis - Miniaturas e Diecast"
-                className="h-16 md:h-24 w-auto object-contain"
-                loading="eager"
-                decoding="async"
-              />
+              <BrandLogo variant="header" />
             </Link>
 
             <form onSubmit={submitSearch} className="hidden md:flex flex-1 max-w-xl mx-4 relative">

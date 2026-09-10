@@ -474,3 +474,45 @@ class TestSiteMaintenance:
             assert back.status_code == 200 and back.json()["maintenance_enabled"] is False
             assert requests.get(f"{BASE_URL}/api/site-status", timeout=15).json()["maintenance_enabled"] is False
 
+
+
+class TestSiteBranding:
+    def test_public_config_open(self):
+        r = requests.get(f"{BASE_URL}/api/site-config", timeout=15)
+        assert r.status_code == 200
+        b = r.json()
+        assert "logo_url" in b and "logo_width" in b
+
+    def test_customer_forbidden(self, customer_session):
+        assert customer_session.get(f"{BASE_URL}/api/admin/site-config", timeout=15).status_code == 403
+        assert customer_session.put(f"{BASE_URL}/api/admin/site-config", json={"logo_width": 100}, timeout=15).status_code == 403
+
+    def test_width_limits(self, admin_session):
+        ok = admin_session.put(f"{BASE_URL}/api/admin/site-config", json={"logo_width": 250}, timeout=15)
+        assert ok.status_code == 200 and ok.json()["logo_width"] == 250
+        assert admin_session.put(f"{BASE_URL}/api/admin/site-config", json={"logo_width": 9999}, timeout=15).status_code == 422
+        assert admin_session.put(f"{BASE_URL}/api/admin/site-config", json={"logo_width": 10}, timeout=15).status_code == 422
+
+    def test_upload_and_fallback(self, admin_session):
+        import io
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new("RGBA", (240, 100), (30, 58, 138, 255)).save(buf, format="PNG")
+        png = buf.getvalue()
+        up = admin_session.post(f"{BASE_URL}/api/admin/site-config/logo",
+                                files={"file": ("logo.png", png, "image/png")}, timeout=20)
+        assert up.status_code == 200, up.text
+        url = up.json()["logo_url"]
+        assert url and url.startswith("/api/uploads/branding/")
+        # arquivo é servido publicamente
+        assert requests.get(f"{BASE_URL}{url}", timeout=15).status_code == 200
+        # público reflete
+        assert requests.get(f"{BASE_URL}/api/site-config", timeout=15).json()["logo_url"] == url
+        # arquivo inválido é rejeitado
+        bad = admin_session.post(f"{BASE_URL}/api/admin/site-config/logo",
+                                 files={"file": ("x.png", b"nao sou imagem", "image/png")}, timeout=15)
+        assert bad.status_code == 400
+        # remover restaura fallback (None)
+        rem = admin_session.delete(f"{BASE_URL}/api/admin/site-config/logo", timeout=15)
+        assert rem.status_code == 200 and rem.json()["logo_url"] is None
+

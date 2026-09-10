@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Instagram, Facebook, Youtube, MessageCircle, Send } from "lucide-react";
 import { toast } from "sonner";
-import { LOGO_HEADER } from "@/lib/brand";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
@@ -50,7 +50,7 @@ export default function Footer() {
 
       <div className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-12 grid grid-cols-2 md:grid-cols-4 gap-8">
         <div className="col-span-2 md:col-span-1">
-          <img src={LOGO_HEADER} alt="Brasil Minis - Miniaturas e Diecast" className="h-24 w-auto object-contain mb-4" />
+          <BrandLogo variant="footer" className="mb-4" />
           <p className="text-sm text-gray-500 leading-relaxed">
             Sua paixão em miniatura. As melhores marcas e edições exclusivas do universo automotivo.
           </p>

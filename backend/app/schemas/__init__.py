@@ -145,3 +145,9 @@ class SiteSettingsInput(BaseModel):
         if not (v.startswith("http://") or v.startswith("https://")):
             raise ValueError("URL deve começar com http:// ou https://")
         return v
+
+
+# ---------- Identidade visual global ----------
+class SiteConfigInput(BaseModel):
+    logo_width: int = Field(default=200, ge=60, le=500)
+    branding: Optional[dict] = None

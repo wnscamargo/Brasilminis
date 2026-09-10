@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { MessageCircle, Instagram } from "lucide-react";
 import api from "@/lib/api";
-import { LOGO_HEADER } from "@/lib/brand";
+import { useSiteConfig } from "@/context/SiteConfigContext";
 
 const BG = "https://images.unsplash.com/photo-1637494873826-795116ba38cc?crop=entropy&cs=srgb&fm=jpg&q=85&w=1600";
 
@@ -40,6 +40,7 @@ function Unit({ value, label }) {
 
 export default function UnderConstruction({ data: propData }) {
   const [data, setData] = useState(propData || null);
+  const { logoSrc, logo_width } = useSiteConfig();
 
   useEffect(() => {
     if (propData) { setData(propData); return; }
@@ -77,9 +78,9 @@ export default function UnderConstruction({ data: propData }) {
       {/* conteúdo */}
       <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-5 py-16 text-center">
         <div style={{ animation: "bmFade .6s ease both" }}>
-          <img src={LOGO_HEADER} alt="Brasil Minis - Miniaturas e Diecast"
-               className="h-28 md:h-40 w-auto object-contain mx-auto drop-shadow-[0_10px_30px_rgba(0,0,0,0.6)]"
-               style={{ animation: "bmFloat 5s ease-in-out infinite" }} />
+          <img src={logoSrc} alt="Brasil Minis - Miniaturas e Diecast"
+               className="w-auto h-auto object-contain mx-auto drop-shadow-[0_10px_30px_rgba(0,0,0,0.6)]"
+               style={{ maxWidth: `min(${(logo_width || 200) * 1.4}px, 80vw)`, maxHeight: "220px", animation: "bmFloat 5s ease-in-out infinite" }} />
         </div>
 
         <p className="mt-8 text-[#FFC107] text-xs md:text-sm font-bold uppercase tracking-[0.3em]"

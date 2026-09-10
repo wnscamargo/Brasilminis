@@ -170,5 +170,9 @@ class SiteSettings(Base):
     instagram_url = Column(String, nullable=True)
     show_whatsapp = Column(Boolean, default=False)
     show_instagram = Column(Boolean, default=False)
+    # Identidade visual GLOBAL (usada pelo site e reutilizada pela manutenção)
+    logo_url = Column(String, nullable=True)       # None => usa a logo padrão (fallback)
+    logo_width = Column(Integer, default=200)       # largura máx. no desktop (px)
+    branding = Column(JSONB, default=dict)          # extensível: favicon, cores, og, etc.
     updated_at = Column(String, nullable=True)
     updated_by = Column(String, nullable=True)

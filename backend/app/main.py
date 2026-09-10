@@ -1,10 +1,12 @@
 import logging
+import os
 from pathlib import Path
 
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from fastapi import FastAPI, Response
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from starlette.middleware.cors import CORSMiddleware
 
@@ -32,6 +34,10 @@ app.include_router(account.router)
 app.include_router(banners.router)
 app.include_router(site.router)
 app.include_router(admin.router)
+
+# Uploads persistentes (identidade visual, etc.) servidos sob /api/uploads.
+os.makedirs(os.path.join(settings.UPLOADS_DIR, "branding"), exist_ok=True)
+app.mount("/api/uploads", StaticFiles(directory=settings.UPLOADS_DIR), name="uploads")
 
 
 @app.get("/api/")

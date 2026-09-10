@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Mail, Lock, ArrowRight } from "lucide-react";
-import { LOGO_EMBLEM } from "@/lib/brand";
+import BrandLogo from "@/components/BrandLogo";
 import { useAuth } from "@/context/AuthContext";
 import { formatApiError } from "@/lib/api";
 
@@ -56,7 +56,7 @@ export function AuthShell({ title, subtitle, children }) {
     <div className="min-h-[80vh] grid place-items-center px-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <img src={LOGO_EMBLEM} alt="Brasil Minis - Miniaturas e Diecast" className="h-24 w-auto mx-auto object-contain" />
+          <BrandLogo variant="auth" className="mx-auto" />
           <h1 className="text-3xl font-display font-black uppercase text-white mt-4">{title}</h1>
           <p className="text-gray-500 mt-2 text-sm">{subtitle}</p>
         </div>

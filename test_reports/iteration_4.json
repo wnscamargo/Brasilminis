@@ -1,0 +1,24 @@
+{
+  "summary": "Frontend-only E2E of the GLOBAL Visual Identity feature (Brasil Minis). All requested scenarios validated on the HTTPS preview URL against the live backend. Admin login → /admin/identidade → upload valid PNG → live-preview + width slider (60–500, live label) → save → header on / uses uploaded logo (no horizontal overflow desktop) → invalid file rejected (backend 400 + error toast, preview unchanged) → maintenance-page (anonymous, mobile 390px) reuses the SAME global uploaded logo → restore default reverts to fallback → anonymous cannot access /admin/identidade (redirected to /login). State left clean: logo removed, logo_width=200, maintenance_enabled=false.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Login: clicking button[type=submit] via Playwright did NOT trigger the login POST; pressing Enter in the password field did. Not a user-facing bug (real users click and browser submits form), but consider verifying the ENTRAR button has an onClick or type='submit' handler that also works with programmatic .click() to make tests deterministic.",
+    "AdminBranding uses window.confirm() for restore — works but blocks headless automation without a dialog handler; consider a custom AlertDialog for consistency with the rest of admin UI.",
+    "SiteConfigContext falls back to LOGO_HEADER only on network error; if /api/site-config returns logo_url=null with no error, that's correctly handled by resolveLogo(). OK."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100% (9/9 scenarios)"},
+  "test_credentials": "admin@brasilminis.com / Admin@2025",
+  "seed_data_creation": "None. Uploaded a 1x1 PNG for the flow, then deleted via Restore default (DELETE /api/admin/site-config/logo). Final /api/site-config = {logo_url:null, logo_width:200, store_name:null}; /api/site-status.maintenance_enabled = false.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Feature is stable. Data-testids verified: branding-preview, branding-file-input (hidden input; use set_input_files even when not visible), branding-upload-btn, branding-restore-btn (uses window.confirm — register page.once('dialog', d=>d.accept()) BEFORE clicking), branding-width-slider (range 60–500, dispatch 'input' + 'change'), branding-width-value, branding-save-btn, branding-view-site, brand-logo (all variants). Login flow: prefer press Enter on password field (button.click() via Playwright didn't trigger submit in this env).",
+  "rca of the issue": "No bugs found. Everything works as specified."
+}

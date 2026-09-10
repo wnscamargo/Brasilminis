@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 
 import { AuthProvider } from "@/context/AuthContext";
+import { SiteConfigProvider } from "@/context/SiteConfigContext";
 import { CartProvider } from "@/context/CartContext";
 import { FavoritesProvider } from "@/context/FavoritesContext";
 import { ProtectedRoute, ScrollToTop } from "@/components/Guards";
@@ -32,6 +33,7 @@ import AdminOrders from "@/pages/admin/AdminOrders";
 import AdminCustomers from "@/pages/admin/AdminCustomers";
 import AdminBanners from "@/pages/admin/AdminBanners";
 import AdminSite from "@/pages/admin/AdminSite";
+import AdminBranding from "@/pages/admin/AdminBranding";
 
 const Shell = ({ children }) => <Layout>{children}</Layout>;
 
@@ -40,6 +42,7 @@ function App() {
     <div className="App">
       <BrowserRouter>
         <AuthProvider>
+          <SiteConfigProvider>
           <CartProvider>
             <FavoritesProvider>
               <ScrollToTop />
@@ -76,11 +79,13 @@ function App() {
                   <Route path="clientes" element={<AdminCustomers />} />
                   <Route path="banners" element={<AdminBanners />} />
                   <Route path="site" element={<AdminSite />} />
+                  <Route path="identidade" element={<AdminBranding />} />
                 </Route>
               </Routes>
               </MaintenanceGate>
             </FavoritesProvider>
           </CartProvider>
+          </SiteConfigProvider>
         </AuthProvider>
       </BrowserRouter>
     </div>

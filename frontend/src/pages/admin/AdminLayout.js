@@ -1,6 +1,6 @@
 import { Link, useLocation, Outlet } from "react-router-dom";
-import { LayoutDashboard, Package, Tags, Award, ShoppingBag, Users, Image, Home, Construction } from "lucide-react";
-import { LOGO_EMBLEM } from "@/lib/brand";
+import { LayoutDashboard, Package, Tags, Award, ShoppingBag, Users, Image, Home, Construction, Palette } from "lucide-react";
+import BrandLogo from "@/components/BrandLogo";
 
 const NAV = [
   { to: "/admin", l: "Dashboard", icon: LayoutDashboard, end: true },
@@ -10,6 +10,7 @@ const NAV = [
   { to: "/admin/pedidos", l: "Pedidos", icon: ShoppingBag },
   { to: "/admin/clientes", l: "Clientes", icon: Users },
   { to: "/admin/banners", l: "Banners", icon: Image },
+  { to: "/admin/identidade", l: "Identidade Visual", icon: Palette },
   { to: "/admin/site", l: "Site em Construção", icon: Construction },
 ];
 
@@ -19,7 +20,7 @@ export default function AdminLayout() {
     <div className="min-h-screen bg-[#0d0d0d] flex">
       <aside className="w-64 shrink-0 border-r border-[#2e2e2e] bg-[#111111] hidden lg:flex flex-col sticky top-0 h-screen">
         <div className="p-5 flex items-center gap-3 border-b border-[#2e2e2e]">
-          <img src={LOGO_EMBLEM} alt="Brasil Minis - Miniaturas e Diecast" className="h-14 w-auto object-contain" />
+          <BrandLogo variant="admin" />
           <div>
             <p className="font-display font-black text-white uppercase text-sm leading-none">Brasil Minis</p>
             <p className="text-xs text-[#FFC107]">Admin</p>
