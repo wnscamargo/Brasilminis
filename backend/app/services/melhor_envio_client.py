@@ -42,6 +42,32 @@ def _headers(access_token: str | None = None) -> dict:
     return h
 
 
+def base_url(env: str | None) -> str:
+    return (
+        "https://sandbox.melhorenvio.com.br"
+        if (env or "sandbox").lower() == "sandbox"
+        else "https://melhorenvio.com.br"
+    )
+
+
+def get_config(db: Session) -> dict:
+    """Config operacional efetiva (banco tem prioridade sobre .env de fallback)."""
+    row = db.get(MelhorEnvioToken, 1)
+    env = (row.environment if row and row.environment else settings.MELHOR_ENVIO_ENV) or "sandbox"
+    client_id = (row.client_id if row else None) or settings.MELHOR_ENVIO_CLIENT_ID or None
+    secret_enc = row.client_secret_enc if row else None
+    client_secret = decrypt(secret_enc) if secret_enc else (settings.MELHOR_ENVIO_CLIENT_SECRET or None)
+    redirect_uri = (row.redirect_uri if row else None) or settings.MELHOR_ENVIO_REDIRECT_URI or None
+    return {
+        "environment": env,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect_uri,
+        "base_url": base_url(env),
+        "configured": bool(client_id and client_secret and redirect_uri),
+    }
+
+
 def get_token_row(db: Session) -> MelhorEnvioToken | None:
     return db.get(MelhorEnvioToken, 1)
 
@@ -57,7 +83,8 @@ def save_token_data(db: Session, data: dict, account_email: str | None = None) -
     row.expires_at = _iso(_now() + timedelta(seconds=int(data.get("expires_in", 2592000))))
     row.scope = data.get("scope") or row.scope
     row.token_type = data.get("token_type") or "Bearer"
-    row.environment = settings.MELHOR_ENVIO_ENV
+    if not row.environment:
+        row.environment = get_config(db)["environment"]
     row.last_error = None
     if account_email:
         row.account_email = account_email
@@ -68,16 +95,17 @@ def save_token_data(db: Session, data: dict, account_email: str | None = None) -
 
 
 def exchange_code(db: Session, code: str) -> MelhorEnvioToken:
+    cfg = get_config(db)
     payload = {
         "grant_type": "authorization_code",
-        "client_id": settings.MELHOR_ENVIO_CLIENT_ID,
-        "client_secret": settings.MELHOR_ENVIO_CLIENT_SECRET,
-        "redirect_uri": settings.MELHOR_ENVIO_REDIRECT_URI,
+        "client_id": cfg["client_id"],
+        "client_secret": cfg["client_secret"],
+        "redirect_uri": cfg["redirect_uri"],
         "code": code,
     }
     try:
         with httpx.Client(timeout=TIMEOUT) as c:
-            r = c.post(f"{settings.MELHOR_ENVIO_BASE_URL}/oauth/token", headers=_headers(), json=payload)
+            r = c.post(f"{cfg['base_url']}/oauth/token", headers=_headers(), json=payload)
     except httpx.HTTPError as e:
         logger.warning("ME token exchange network error: %s", type(e).__name__)
         raise MelhorEnvioUnavailable()
@@ -91,15 +119,16 @@ def _refresh(db: Session, row: MelhorEnvioToken) -> MelhorEnvioToken:
     refresh_token = decrypt(row.refresh_token_enc)
     if not refresh_token:
         raise HTTPException(status_code=401, detail="Conta Melhor Envio desconectada. Reconecte.")
+    cfg = get_config(db)
     payload = {
         "grant_type": "refresh_token",
-        "client_id": settings.MELHOR_ENVIO_CLIENT_ID,
-        "client_secret": settings.MELHOR_ENVIO_CLIENT_SECRET,
+        "client_id": cfg["client_id"],
+        "client_secret": cfg["client_secret"],
         "refresh_token": refresh_token,
     }
     try:
         with httpx.Client(timeout=TIMEOUT) as c:
-            r = c.post(f"{settings.MELHOR_ENVIO_BASE_URL}/oauth/token", headers=_headers(), json=payload)
+            r = c.post(f"{cfg['base_url']}/oauth/token", headers=_headers(), json=payload)
     except httpx.HTTPError:
         raise MelhorEnvioUnavailable()
     if r.is_error:
@@ -126,7 +155,7 @@ def _valid_access_token(db: Session) -> tuple[MelhorEnvioToken, str]:
 def api_request(db: Session, method: str, path: str, json: dict | None = None, params: dict | None = None):
     """Chamada autenticada à API v2 com no máximo 1 retry após refresh em 401."""
     row, access = _valid_access_token(db)
-    url = f"{settings.MELHOR_ENVIO_BASE_URL}{path}"
+    url = f"{get_config(db)['base_url']}{path}"
     try:
         with httpx.Client(timeout=TIMEOUT) as c:
             r = c.request(method, url, headers=_headers(access), json=json, params=params)

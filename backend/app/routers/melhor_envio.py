@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.dependencies import get_current_admin, get_current_user, get_db
 from app.models import MelhorEnvioWebhookEvent
-from app.schemas import SenderInput, ShippingQuoteInput
+from app.schemas import MelhorEnvioCredentialsInput, SenderInput, ShippingQuoteInput
 from app.services import melhor_envio_auth_service as auth_service
 from app.services import melhor_envio_quote_service as quote_service
 from app.services import melhor_envio_shipment_service as shipment_service
@@ -26,6 +26,19 @@ router = APIRouter(prefix="/api", tags=["melhor-envio"])
 @router.get("/admin/melhor-envio/status")
 def me_status(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
     return auth_service.status(db)
+
+
+@router.get("/admin/melhor-envio/credentials")
+def me_get_credentials(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return auth_service.get_credentials(db)
+
+
+@router.put("/admin/melhor-envio/credentials")
+def me_save_credentials(payload: MelhorEnvioCredentialsInput, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    try:
+        return auth_service.save_credentials(db, payload.model_dump(exclude_unset=True))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/admin/melhor-envio/auth-url")
@@ -125,7 +138,7 @@ def tracking_shipment(order_id: str, admin: dict = Depends(get_current_admin), d
 @router.post("/webhooks/melhor-envio")
 async def me_webhook(request: Request, x_me_signature: str = Header(default=""), db: Session = Depends(get_db)):
     raw = await request.body()
-    secret = settings.MELHOR_ENVIO_CLIENT_SECRET or ""
+    secret = auth_service.client.get_config(db)["client_secret"] or ""
     if secret and x_me_signature:
         expected = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
         expected_b64 = __import__("base64").b64encode(

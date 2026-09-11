@@ -76,18 +76,19 @@ def health(response: Response):
 
     # Melhor Envio é OPCIONAL: nunca transforma em 503.
     me_state = "not_configured"
-    if settings.MELHOR_ENVIO_CONFIGURED:
+    try:
+        db = SessionLocal()
         try:
-            db = SessionLocal()
-            try:
-                st = auth_service.status(db).get("status")
+            st_full = auth_service.status(db)
+            if st_full.get("configured"):
+                st = st_full.get("status")
                 me_state = "connected" if st == "connected" else (
                     "unavailable" if st in ("error", "token_expired") else "not_configured"
                 )
-            finally:
-                db.close()
-        except Exception:
-            me_state = "unavailable"
+        finally:
+            db.close()
+    except Exception:
+        me_state = "unavailable"
 
     return {
         "status": "ok" if healthy else "degraded",

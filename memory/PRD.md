@@ -233,3 +233,25 @@ Migration `e4f5a6b7c8d9` (não-destrutiva). Branch alvo: `mercado-pago-gateway`.
 
 ### Infra (variáveis)
 - `MERCADO_PAGO_TOKEN_ENCRYPTION_KEY` (Fernet, só backend/.env), `MERCADO_PAGO_API_BASE=https://api.mercadopago.com`. Credenciais (Public Key/Access Token/Webhook Secret) via painel Admin. Não fazer deploy; salvar em `mercado-pago-gateway`.
+
+
+---
+
+## Central de Integrações + Checkout Real (Jun/2026) — branch `integrations-production-ready`
+
+### Entregue
+- **Central de Integrações** `/admin/integracoes` (`AdminIntegracoes.js`): cards unificados MP + Melhor Envio com badge de ambiente, status, seletor de ambiente (com `window.confirm`), campos de credenciais (secret/token em `type=password`, mascarados), Salvar/Testar/Conectar/Desconectar, botão "Ativar produção" (gating) e dica visual. Item de menu "Integrações" no `AdminLayout`.
+- **Credenciais no banco (cifradas)**: Melhor Envio agora guarda `client_id`, `client_secret_enc` (Fernet), `redirect_uri` na tabela `melhor_envio_tokens` (migration `f5a6b7c8d9e0`). `.env` só tem chaves Fernet/infra. Endpoints `GET/PUT /api/admin/melhor-envio/credentials`. `get_config(db)` com fallback legado ao `.env`.
+- **Troca de ambiente com isolamento**: ME (sandbox↔production) e MP (test↔production) desassociam tokens/sessão anteriores. MP limpa public_key/access_token e desativa.
+- **Produção protegida (MP)**: `save_settings` nunca ativa produção; `POST /api/admin/mercado-pago/activate {confirm}` exige status=connected (teste prévio) + confirmação explícita. `_access_token` não bloqueia mais produção.
+- **Scopes OAuth Melhor Envio** corrigidos: removidos `shipping-cancel` e `shipping-tracking`. Restam os 6 válidos.
+- **Checkout REAL** (`Checkout.js` + `components/checkout/MercadoPagoPayment.js`): quando MP ativo, `create_order` cria pedido `aguardando_pagamento` e a UI mostra passo de pagamento — PIX (QR base64 + copia-e-cola + polling de status) ou Cartão via **Card Payment Brick** (`@mercadopago/sdk-react`). Boleto oculto quando MP ativo. Sem MP ativo, mantém fluxo SIMULADO.
+- `GET /api/mercado-pago/public-key` agora retorna `enabled`. `GET /api/admin/integrations` (visão unificada).
+- Doc: `/app/backend/INTEGRATIONS.md` (variáveis .env + passos de produção).
+
+### Testes
+- `tests/test_mercado_pago.py` + `tests/test_melhor_envio.py`: **26/26 PASS** (cifragem, gating de produção, troca de ambiente, dedup/HMAC webhook, scopes). Regressão `test_new_features.py` + `backend_test.py`: **80 PASS**. Testing agent (iteration_7): backend 10/10 + frontend 100%, sem bugs.
+- **Limitação**: preview sem credenciais reais do MP (DB efêmero) → PIX/cartão/webhook validados via mocks (respx), não contra a API real.
+
+### Deploy
+- NÃO deployado. Usar "Save to Github" para a branch `integrations-production-ready`. Migration head: `f5a6b7c8d9e0`.

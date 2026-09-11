@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_admin, get_current_user, get_db
-from app.schemas import CardPaymentInput, MpSettingsInput, PixPaymentInput
+from app.schemas import CardPaymentInput, MpActivateInput, MpSettingsInput, PixPaymentInput
 from app.services import cep_service
 from app.services import mercado_pago_service as mp
 
@@ -18,6 +18,16 @@ router = APIRouter(prefix="/api", tags=["payments"])
 @router.get("/cep/{cep}")
 def cep_lookup(cep: str):
     return cep_service.lookup(cep)
+
+
+# ---------- Admin: Central de Integrações (visão unificada) ----------
+@router.get("/admin/integrations")
+def integrations_overview(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    from app.services import melhor_envio_auth_service as me_auth
+    return {
+        "mercado_pago": mp.status(db),
+        "melhor_envio": {**me_auth.status(db), **me_auth.get_credentials(db)},
+    }
 
 
 # ---------- Admin: Mercado Pago ----------
@@ -36,6 +46,11 @@ def mp_test(admin: dict = Depends(get_current_admin), db: Session = Depends(get_
     return mp.test_connection(db)
 
 
+@router.post("/admin/mercado-pago/activate")
+def mp_activate(payload: MpActivateInput, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return mp.activate_production(db, payload.confirm)
+
+
 @router.post("/admin/mercado-pago/disconnect")
 def mp_disconnect(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
     return mp.disconnect(db)
@@ -52,7 +67,7 @@ def mp_public_key(db: Session = Depends(get_db)):
     st = mp.status(db)
     if not st.get("public_key"):
         raise HTTPException(status_code=503, detail="Mercado Pago não configurado.")
-    return {"public_key": st["public_key"], "environment": st["environment"]}
+    return {"public_key": st["public_key"], "environment": st["environment"], "enabled": mp.is_active(db)}
 
 
 # ---------- Cliente: criação de pagamento ----------

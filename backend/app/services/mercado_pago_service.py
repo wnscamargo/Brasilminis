@@ -67,25 +67,62 @@ def status(db: Session) -> dict:
 
 
 def save_settings(db: Session, data: dict) -> dict:
-    if (data.get("environment") or "test") != "test":
-        raise HTTPException(status_code=400, detail="Produção está bloqueada nesta fase. Use o ambiente de TESTE.")
+    env = (data.get("environment") or "test").lower()
+    if env not in ("test", "production"):
+        raise HTTPException(status_code=400, detail="Ambiente inválido. Use 'test' ou 'production'.")
     row = get_row(db)
     if not row:
         row = MpSettings(id=1, created_at=_now())
         db.add(row)
-    row.environment = "test"
+    # Isolamento: alternar ambiente limpa credenciais/estado do ambiente anterior.
+    if row.environment != env:
+        row.public_key = None
+        row.access_token_enc = None
+        row.webhook_secret_enc = None
+        row.is_enabled = False
+        row.status = "not_configured"
+        row.last_test_at = None
+        row.last_error = None
+    row.environment = env
     if data.get("public_key"):
         row.public_key = data["public_key"].strip()
     if data.get("access_token"):
         row.access_token_enc = mp_encrypt(data["access_token"].strip())
     if data.get("webhook_secret"):
         row.webhook_secret_enc = mp_encrypt(data["webhook_secret"].strip())
-    row.is_enabled = bool(data.get("is_enabled", row.is_enabled))
-    row.status = "configured" if (row.public_key and row.access_token_enc) else "not_configured"
+    configured = bool(row.public_key and row.access_token_enc)
+    row.status = "configured" if configured else "not_configured"
+    # Teste: pode habilitar direto. Produção: só via activate() com confirmação.
+    if env == "test":
+        row.is_enabled = bool(data.get("is_enabled", row.is_enabled)) and configured
+    else:
+        row.is_enabled = False
     row.last_error = None
     row.updated_at = _now()
     db.commit()
     return status(db)
+
+
+def activate_production(db: Session, confirm: bool) -> dict:
+    """Ativa o modo produção. Exige confirmação explícita e teste OK prévio."""
+    row = get_row(db)
+    if not row or row.environment != "production":
+        raise HTTPException(status_code=400, detail="Configure o ambiente de produção primeiro.")
+    if not (row.public_key and row.access_token_enc):
+        raise HTTPException(status_code=400, detail="Cadastre Public Key e Access Token de produção.")
+    if row.status != "connected":
+        raise HTTPException(status_code=400, detail="Teste a conexão de produção antes de ativar.")
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Confirmação explícita necessária para ativar produção.")
+    row.is_enabled = True
+    row.updated_at = _now()
+    db.commit()
+    return status(db)
+
+
+def is_active(db: Session) -> bool:
+    row = get_row(db)
+    return bool(row and row.is_enabled and row.public_key and row.access_token_enc)
 
 
 def disconnect(db: Session) -> dict:
@@ -100,8 +137,6 @@ def _access_token(db: Session) -> str:
     row = get_row(db)
     if not row or not row.access_token_enc:
         raise HTTPException(status_code=400, detail="Mercado Pago não configurado.")
-    if row.environment != "test":
-        raise HTTPException(status_code=400, detail="Produção bloqueada nesta fase.")
     token = mp_decrypt(row.access_token_enc)
     if not token:
         raise HTTPException(status_code=400, detail="Credencial inválida. Cadastre o Access Token novamente.")

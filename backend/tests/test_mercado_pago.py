@@ -22,6 +22,22 @@ def db():
     s.close()
 
 
+@pytest.fixture(autouse=True)
+def _clean_state():
+    """Isolamento: limpa eventos, settings e pedidos de teste (Postgres compartilhado)."""
+    s = SessionLocal()
+    try:
+        s.query(MpWebhookEvent).delete()
+        s.query(Order).filter(Order.user_id == "u1").delete()
+        row = s.get(MpSettings, 1)
+        if row:
+            s.delete(row)
+        s.commit()
+    finally:
+        s.close()
+    yield
+
+
 def _seed_settings(db, enabled=True):
     row = db.get(MpSettings, 1) or MpSettings(id=1)
     row.environment = "test"
@@ -54,10 +70,42 @@ def test_settings_encrypt_and_no_plain_token(db):
     assert "SECRET-TOKEN" not in str(st)  # nunca vaza
 
 
-def test_production_blocked(db):
+def test_production_requires_confirmation_and_test(db):
+    # Salvar produção NÃO ativa automaticamente.
+    mp.save_settings(db, {"environment": "production", "public_key": "PK-PROD", "access_token": "APP-PROD"})
+    row = db.get(MpSettings, 1)
+    assert row.environment == "production"
+    assert row.is_enabled is False  # nunca ativa automaticamente
+    # Ativar sem teste prévio (status != connected) deve falhar.
     with pytest.raises(Exception) as e:
-        mp.save_settings(db, {"environment": "production", "public_key": "PK", "access_token": "T"})
-    assert "bloqueada" in str(e.value).lower()
+        mp.activate_production(db, confirm=True)
+    assert "teste" in str(e.value).lower()
+    # Simula teste OK e tenta ativar sem confirmação.
+    row.status = "connected"; db.commit()
+    with pytest.raises(Exception) as e2:
+        mp.activate_production(db, confirm=False)
+    assert "confirma" in str(e2.value).lower()
+    # Com teste OK + confirmação, ativa.
+    out = mp.activate_production(db, confirm=True)
+    assert out["is_enabled"] is True
+
+
+def test_environment_switch_clears_credentials(db):
+    mp.save_settings(db, {"environment": "test", "public_key": "PK-TEST", "access_token": "APP-TEST", "is_enabled": True})
+    row = db.get(MpSettings, 1)
+    assert row.is_enabled is True and row.public_key == "PK-TEST"
+    # Trocar para produção limpa credenciais e desabilita (isolamento).
+    mp.save_settings(db, {"environment": "production"})
+    row = db.get(MpSettings, 1)
+    assert row.environment == "production"
+    assert row.public_key is None and row.access_token_enc is None
+    assert row.is_enabled is False
+
+
+def test_is_active_only_when_enabled_and_configured(db):
+    assert mp.is_active(db) is False
+    mp.save_settings(db, {"environment": "test", "public_key": "PK", "access_token": "T", "is_enabled": True})
+    assert mp.is_active(db) is True
 
 
 @respx.mock

@@ -152,6 +152,16 @@ def create_order(db: Session, user: dict, payload: CheckoutInput) -> dict:
         total = _money(amount_after_discount + shipping)
         recipient_snapshot = _build_recipient(payload, user)
 
+        # Pagamento real (Mercado Pago) quando ativo e método PIX/cartão.
+        from app.services import mercado_pago_service as mp
+        use_real_payment = mp.is_active(db) and payload.payment_method in ("pix", "card")
+        if use_real_payment:
+            initial_payment_status = "pending"
+            initial_order_status = "aguardando_pagamento"
+        else:
+            initial_payment_status = PAYMENT_STATUS_MOCK
+            initial_order_status = "confirmado"
+
         order = Order(
             id=str(uuid.uuid4()),
             order_number=f"BM{random.randint(100000, 999999)}",
@@ -178,8 +188,9 @@ def create_order(db: Session, user: dict, payload: CheckoutInput) -> dict:
             recipient_snapshot=recipient_snapshot,
             total=total,
             payment_method=payload.payment_method,
-            payment_status=PAYMENT_STATUS_MOCK,  # MOCKED payment
-            status="confirmado",
+            payment_status=initial_payment_status,
+            payment_provider=("mercado_pago" if use_real_payment else None),
+            status=initial_order_status,
             address=payload.address.model_dump() if payload.address else None,
             created_at=datetime.now(timezone.utc).isoformat(),
         )
@@ -212,5 +223,14 @@ def create_order(db: Session, user: dict, payload: CheckoutInput) -> dict:
         raise
 
     result = to_dict(order)
-    result["payment"] = build_mock_payment(payload.payment_method)
+    if use_real_payment:
+        result["payment"] = {
+            "provider": "mercado_pago",
+            "method": payload.payment_method,
+            "requires_payment": True,
+            "status": "pending",
+        }
+    else:
+        result["payment"] = build_mock_payment(payload.payment_method)
+        result["payment"]["requires_payment"] = False
     return result

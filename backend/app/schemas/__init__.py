@@ -174,6 +174,18 @@ class MpSettingsInput(BaseModel):
     is_enabled: bool = False
 
 
+class MpActivateInput(BaseModel):
+    confirm: bool = False
+
+
+# ---------- Melhor Envio: credenciais operacionais (painel) ----------
+class MelhorEnvioCredentialsInput(BaseModel):
+    environment: str = "sandbox"  # sandbox | production
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    redirect_uri: Optional[str] = None
+
+
 class PixPaymentInput(BaseModel):
     order_id: str
 

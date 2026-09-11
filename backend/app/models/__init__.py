@@ -245,6 +245,10 @@ class MelhorEnvioToken(Base):
     """Token OAuth (linha única, id=1). Tokens armazenados CRIPTOGRAFADOS (Fernet)."""
     __tablename__ = "melhor_envio_tokens"
     id = Column(Integer, primary_key=True, default=1)
+    # Credenciais operacionais do app (gerenciadas pelo painel, NÃO pelo .env)
+    client_id = Column(String, nullable=True)
+    client_secret_enc = Column(Text, nullable=True)  # cifrado (Fernet)
+    redirect_uri = Column(String, nullable=True)
     access_token_enc = Column(Text, nullable=True)
     refresh_token_enc = Column(Text, nullable=True)
     expires_at = Column(String, nullable=True)  # ISO 8601 (UTC)
