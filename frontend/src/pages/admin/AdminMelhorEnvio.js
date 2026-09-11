@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Truck, Plug, PlugZap, RefreshCw, Unplug, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
+import { useCepAutofill, maskCep } from "@/lib/cep";
 
 const STATUS_UI = {
   not_configured: { label: "Não configurado", color: "#6b7280", icon: AlertTriangle },
@@ -22,6 +23,14 @@ export default function AdminMelhorEnvio() {
   const [status, setStatus] = useState(null);
   const [sender, setSender] = useState({});
   const [busy, setBusy] = useState(false);
+
+  const fillFromCep = useCepAutofill((d) => setSender((s) => ({
+    ...s,
+    address: d.street || s.address,
+    district: d.district || s.district,
+    city: d.city || s.city,
+    state_abbr: d.uf || s.state_abbr,
+  })));
 
   const loadStatus = useCallback(() => api.get("/admin/melhor-envio/status").then((r) => setStatus(r.data)), []);
   useEffect(() => {
@@ -120,7 +129,7 @@ export default function AdminMelhorEnvio() {
           {SENDER_FIELDS.map(([key, label]) => (
             <div key={key}>
               <label className="text-xs text-gray-500 block mb-1">{label}</label>
-              <input value={sender[key] || ""} onChange={(e) => setSender({ ...sender, [key]: e.target.value })} data-testid={`sender-${key}`} className="w-full bg-[#111111] border border-[#2e2e2e] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#1E3A8A]" />
+              <input value={sender[key] || ""} onChange={(e) => { const val = key === "postal_code" ? maskCep(e.target.value) : e.target.value; setSender({ ...sender, [key]: val }); if (key === "postal_code") fillFromCep(val); }} data-testid={`sender-${key}`} className="w-full bg-[#111111] border border-[#2e2e2e] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#1E3A8A]" />
             </div>
           ))}
         </div>

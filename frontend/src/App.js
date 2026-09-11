@@ -35,6 +35,8 @@ import AdminBanners from "@/pages/admin/AdminBanners";
 import AdminSite from "@/pages/admin/AdminSite";
 import AdminBranding from "@/pages/admin/AdminBranding";
 import AdminMelhorEnvio from "@/pages/admin/AdminMelhorEnvio";
+import AdminMercadoPago from "@/pages/admin/AdminMercadoPago";
+import AdminIntegracoes from "@/pages/admin/AdminIntegracoes";
 
 const Shell = ({ children }) => <Layout>{children}</Layout>;
 
@@ -81,7 +83,9 @@ function App() {
                   <Route path="banners" element={<AdminBanners />} />
                   <Route path="site" element={<AdminSite />} />
                   <Route path="identidade" element={<AdminBranding />} />
+                  <Route path="integracoes" element={<AdminIntegracoes />} />
                   <Route path="melhor-envio" element={<AdminMelhorEnvio />} />
+                  <Route path="mercado-pago" element={<AdminMercadoPago />} />
                 </Route>
               </Routes>
               </MaintenanceGate>

@@ -165,6 +165,40 @@ class SenderInput(BaseModel):
     state_abbr: Optional[str] = None
 
 
+# ---------- Mercado Pago ----------
+class MpSettingsInput(BaseModel):
+    environment: str = "test"
+    public_key: Optional[str] = None
+    access_token: Optional[str] = None
+    webhook_secret: Optional[str] = None
+    is_enabled: bool = False
+
+
+class MpActivateInput(BaseModel):
+    confirm: bool = False
+
+
+# ---------- Melhor Envio: credenciais operacionais (painel) ----------
+class MelhorEnvioCredentialsInput(BaseModel):
+    environment: str = "sandbox"  # sandbox | production
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    redirect_uri: Optional[str] = None
+
+
+class PixPaymentInput(BaseModel):
+    order_id: str
+
+
+class CardPaymentInput(BaseModel):
+    order_id: str
+    token: str
+    installments: int = 1
+    payment_method_id: str
+    issuer_id: Optional[int] = None
+    payer_email: Optional[str] = None
+
+
 class CouponValidateInput(BaseModel):
     code: str
 

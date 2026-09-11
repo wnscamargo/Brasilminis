@@ -27,3 +27,26 @@ def decrypt(value: str) -> str:
         return _fernet().decrypt(value.encode()).decode()
     except InvalidToken:
         return None
+
+
+@lru_cache(maxsize=1)
+def _mp_fernet() -> Fernet:
+    key = settings.MERCADO_PAGO_TOKEN_ENCRYPTION_KEY
+    if not key:
+        raise RuntimeError("MERCADO_PAGO_TOKEN_ENCRYPTION_KEY não configurada")
+    return Fernet(key.encode() if isinstance(key, str) else key)
+
+
+def mp_encrypt(value: str) -> str:
+    if value is None:
+        return None
+    return _mp_fernet().encrypt(value.encode()).decode()
+
+
+def mp_decrypt(value: str) -> str:
+    if not value:
+        return None
+    try:
+        return _mp_fernet().decrypt(value.encode()).decode()
+    except InvalidToken:
+        return None

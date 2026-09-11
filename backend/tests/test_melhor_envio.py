@@ -31,6 +31,15 @@ def _configure(monkeypatch):
     monkeypatch.setattr(settings, "MELHOR_ENVIO_CLIENT_ID", "123", raising=False)
     monkeypatch.setattr(settings, "MELHOR_ENVIO_CLIENT_SECRET", "secret", raising=False)
     monkeypatch.setattr(settings, "MELHOR_ENVIO_REDIRECT_URI", "https://x.test/api/admin/melhor-envio/callback", raising=False)
+    # Isolamento: garante linha limpa (env sandbox) entre testes.
+    s = SessionLocal()
+    try:
+        row = s.get(MelhorEnvioToken, 1)
+        if row:
+            s.delete(row)
+            s.commit()
+    finally:
+        s.close()
     yield
 
 
@@ -71,6 +80,50 @@ def _mk_product(db, with_dims=True):
         p.weight_kg = 0.3; p.width_cm = 11; p.height_cm = 4; p.length_cm = 16
     db.add(p); db.commit()
     return p
+
+
+# ---------------- Credenciais no banco / troca de ambiente ----------------
+def test_credentials_saved_in_db_and_secret_encrypted(db, monkeypatch):
+    # Zera o fallback do .env para garantir que a config vem do banco.
+    monkeypatch.setattr(settings, "MELHOR_ENVIO_CLIENT_ID", "", raising=False)
+    monkeypatch.setattr(settings, "MELHOR_ENVIO_CLIENT_SECRET", "", raising=False)
+    monkeypatch.setattr(settings, "MELHOR_ENVIO_REDIRECT_URI", "", raising=False)
+    auth.save_credentials(db, {
+        "environment": "sandbox", "client_id": "APPID", "client_secret": "APPSECRET",
+        "redirect_uri": "https://x.test/api/admin/melhor-envio/callback",
+    })
+    row = db.get(MelhorEnvioToken, 1)
+    assert row.client_id == "APPID"
+    assert row.client_secret_enc and row.client_secret_enc != "APPSECRET"
+    assert decrypt(row.client_secret_enc) == "APPSECRET"
+    cfg = client.get_config(db)
+    assert cfg["configured"] is True and cfg["client_secret"] == "APPSECRET"
+    creds = auth.get_credentials(db)
+    assert creds["client_secret_masked"] == "••••••"
+    assert "APPSECRET" not in str(creds)
+
+
+def test_environment_switch_clears_session(db, monkeypatch):
+    monkeypatch.setattr(settings, "MELHOR_ENVIO_CLIENT_ID", "", raising=False)
+    monkeypatch.setattr(settings, "MELHOR_ENVIO_CLIENT_SECRET", "", raising=False)
+    monkeypatch.setattr(settings, "MELHOR_ENVIO_REDIRECT_URI", "", raising=False)
+    auth.save_credentials(db, {"environment": "sandbox", "client_id": "A", "client_secret": "S",
+                               "redirect_uri": "https://x.test/cb"})
+    _seed_token(db)  # simula conta conectada
+    row = db.get(MelhorEnvioToken, 1)
+    row.environment = "sandbox"; row.account_email = "conta@sandbox.com"; db.commit()
+    # Trocar de ambiente desassocia a sessão anterior.
+    auth.save_credentials(db, {"environment": "production"})
+    row = db.get(MelhorEnvioToken, 1)
+    assert row.environment == "production"
+    assert row.access_token_enc is None and row.refresh_token_enc is None
+    assert row.account_email is None
+
+
+def test_scopes_exclude_cancel_and_tracking():
+    assert "shipping-cancel" not in auth.SCOPES
+    assert "shipping-tracking" not in auth.SCOPES
+    assert "shipping-calculate" in auth.SCOPES
 
 
 # ---------------- OAuth ----------------

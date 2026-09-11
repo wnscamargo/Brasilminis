@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CheckCircle2, QrCode, CreditCard, Barcode, Tag, Lock } from "lucide-react";
 import { toast } from "sonner";
@@ -6,6 +6,8 @@ import api, { formatApiError } from "@/lib/api";
 import { formatBRL } from "@/lib/brand";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { useCepAutofill, maskCep } from "@/lib/cep";
+import MercadoPagoPayment from "@/components/checkout/MercadoPagoPayment";
 
 export default function Checkout() {
   const { items, subtotal, clearCart } = useCart();
@@ -22,6 +24,9 @@ export default function Checkout() {
   const [discount, setDiscount] = useState(0);
   const [placing, setPlacing] = useState(false);
   const [done, setDone] = useState(null);
+  // Mercado Pago (pagamento real)
+  const [mp, setMp] = useState({ loaded: false, enabled: false, publicKey: null });
+  const [payStep, setPayStep] = useState(null); // pedido aguardando pagamento real
   // Melhor Envio
   const [recipientDoc, setRecipientDoc] = useState("");
   const [recipientPhone, setRecipientPhone] = useState(user?.phone || "");
@@ -29,6 +34,24 @@ export default function Checkout() {
   const [quoteId, setQuoteId] = useState(null);
   const [selectedShip, setSelectedShip] = useState(null);
   const [calculating, setCalculating] = useState(false);
+
+  useEffect(() => {
+    api.get("/mercado-pago/public-key")
+      .then(({ data }) => setMp({ loaded: true, enabled: !!data.enabled, publicKey: data.public_key }))
+      .catch(() => setMp({ loaded: true, enabled: false, publicKey: null }));
+  }, []);
+
+  useEffect(() => {
+    if (mp.enabled && payment === "boleto") setPayment("pix");
+  }, [mp.enabled, payment]);
+
+  const fillFromCep = useCepAutofill((d) => setAddress((a) => ({
+    ...a,
+    street: d.street || a.street,
+    district: d.district || a.district,
+    city: d.city || a.city,
+    state: d.uf || a.state,
+  })));
 
   if (!user) {
     return (
@@ -105,7 +128,11 @@ export default function Checkout() {
         recipient_phone: recipientPhone || null,
       });
       clearCart();
-      setDone(data);
+      if (data.payment?.requires_payment) {
+        setPayStep(data);
+      } else {
+        setDone(data);
+      }
       window.scrollTo(0, 0);
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail));
@@ -113,6 +140,33 @@ export default function Checkout() {
       setPlacing(false);
     }
   };
+
+  const onPaymentApproved = (order) => {
+    setPayStep(null);
+    setDone({ ...order, _real_payment: true });
+    window.scrollTo(0, 0);
+  };
+
+  if (payStep) {
+    return (
+      <div className="max-w-[700px] mx-auto px-4 py-12">
+        <h1 className="text-2xl lg:text-3xl font-display font-black uppercase text-white mb-2">Finalize o pagamento</h1>
+        <p className="text-gray-400 text-sm mb-6">Pedido <span className="text-[#FFC107] font-bold">#{payStep.order_number}</span> · {formatBRL(payStep.total)}</p>
+        <div className="bm-card p-6" data-testid="payment-step">
+          <MercadoPagoPayment
+            order={payStep}
+            method={payStep.payment_method || payment}
+            publicKey={mp.publicKey}
+            payerEmail={user?.email}
+            onApproved={onPaymentApproved}
+          />
+        </div>
+        <button onClick={() => { setPayStep(null); navigate("/conta"); }} data-testid="pay-later-btn" className="mt-4 text-sm text-gray-400 hover:text-white underline">
+          Pagar depois (ver em meus pedidos)
+        </button>
+      </div>
+    );
+  }
 
   if (done) {
     return (
@@ -123,10 +177,16 @@ export default function Checkout() {
           Pedido <span className="text-[#FFC107] font-bold">#{done.order_number}</span> recebido com sucesso.
         </p>
         <div className="bm-card p-6 mt-8 text-left">
-          <div className="bg-[#FFC107]/10 border border-[#FFC107]/30 rounded-lg p-3 mb-4 text-xs text-[#FFC107]">
-            Pagamento SIMULADO (aprovado). Integração Mercado Pago será ativada em produção.
-          </div>
-          {done.payment?.pix_qr && (
+          {done._real_payment ? (
+            <div className="bg-[#009B3A]/10 border border-[#009B3A]/30 rounded-lg p-3 mb-4 text-xs text-[#009B3A] flex items-center gap-2">
+              <CheckCircle2 size={16} /> Pagamento confirmado via Mercado Pago.
+            </div>
+          ) : (
+            <div className="bg-[#FFC107]/10 border border-[#FFC107]/30 rounded-lg p-3 mb-4 text-xs text-[#FFC107]">
+              Pagamento SIMULADO (aprovado). Configure o Mercado Pago no painel para cobrar de verdade.
+            </div>
+          )}
+          {done.payment?.pix_qr && !done._real_payment && (
             <div className="flex items-center gap-3 mb-4">
               <QrCode size={40} className="text-white" />
               <div>
@@ -145,11 +205,16 @@ export default function Checkout() {
     );
   }
 
-  const payments = [
-    { v: "pix", l: "PIX", icon: QrCode, note: "Aprovação imediata" },
-    { v: "card", l: "Cartão de Crédito", icon: CreditCard, note: "Em até 12x" },
-    { v: "boleto", l: "Boleto", icon: Barcode, note: "Vence em 3 dias" },
-  ];
+  const payments = mp.enabled
+    ? [
+        { v: "pix", l: "PIX", icon: QrCode, note: "Aprovação imediata" },
+        { v: "card", l: "Cartão de Crédito", icon: CreditCard, note: "Em até 12x" },
+      ]
+    : [
+        { v: "pix", l: "PIX", icon: QrCode, note: "Aprovação imediata" },
+        { v: "card", l: "Cartão de Crédito", icon: CreditCard, note: "Em até 12x" },
+        { v: "boleto", l: "Boleto", icon: Barcode, note: "Vence em 3 dias" },
+      ];
 
   return (
     <div className="max-w-[1200px] mx-auto px-4 lg:px-8 py-10">
@@ -161,7 +226,7 @@ export default function Checkout() {
             <h3 className="font-display font-bold text-white uppercase mb-4">Endereço de entrega</h3>
             <div className="grid grid-cols-2 gap-3">
               <Input label="Destinatário" value={address.recipient} onChange={(v) => setAddress({ ...address, recipient: v })} full testid="addr-recipient" />
-              <Input label="CEP" value={address.zip} onChange={(v) => setAddress({ ...address, zip: v })} testid="addr-zip" />
+              <Input label="CEP" value={address.zip} onChange={(v) => { const mv = maskCep(v); setAddress((a) => ({ ...a, zip: mv })); fillFromCep(mv); }} testid="addr-zip" />
               <Input label="Estado" value={address.state} onChange={(v) => setAddress({ ...address, state: v })} testid="addr-state" />
               <Input label="Rua" value={address.street} onChange={(v) => setAddress({ ...address, street: v })} testid="addr-street" />
               <Input label="Número" value={address.number} onChange={(v) => setAddress({ ...address, number: v })} testid="addr-number" />

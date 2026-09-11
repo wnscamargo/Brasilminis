@@ -15,7 +15,7 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.dependencies import get_db  # noqa: F401  (garante import do pacote)
 from app import models  # noqa: F401  (registra os modelos no metadata)
-from app.routers import account, admin, auth, banners, catalog, favorites, melhor_envio, orders, reviews, site
+from app.routers import account, admin, auth, banners, catalog, favorites, melhor_envio, orders, payments, reviews, site
 from app.seed import seed_admin, seed_data
 from app.services import melhor_envio_auth_service as auth_service
 
@@ -36,6 +36,7 @@ app.include_router(banners.router)
 app.include_router(site.router)
 app.include_router(admin.router)
 app.include_router(melhor_envio.router)
+app.include_router(payments.router)
 
 # Uploads persistentes (identidade visual, imagens de produto) servidos sob /api/uploads.
 os.makedirs(os.path.join(settings.UPLOADS_DIR, "branding"), exist_ok=True)
@@ -75,25 +76,46 @@ def health(response: Response):
 
     # Melhor Envio é OPCIONAL: nunca transforma em 503.
     me_state = "not_configured"
-    if settings.MELHOR_ENVIO_CONFIGURED:
+    try:
+        db = SessionLocal()
         try:
-            db = SessionLocal()
-            try:
-                st = auth_service.status(db).get("status")
+            st_full = auth_service.status(db)
+            if st_full.get("configured"):
+                st = st_full.get("status")
                 me_state = "connected" if st == "connected" else (
                     "unavailable" if st in ("error", "token_expired") else "not_configured"
                 )
-            finally:
-                db.close()
-        except Exception:
-            me_state = "unavailable"
+        finally:
+            db.close()
+    except Exception:
+        me_state = "unavailable"
 
     return {
         "status": "ok" if healthy else "degraded",
         "database": database,
         "migration": migration,
         "melhor_envio": me_state,
+        "mercado_pago": _mp_state(),
     }
+
+
+def _mp_state() -> str:
+    try:
+        db = SessionLocal()
+        try:
+            from app.services import mercado_pago_service as mp
+            st = mp.status(db).get("status")
+            if st == "connected":
+                return "connected"
+            if st in ("not_configured",):
+                return "not_configured"
+            if st in ("error",):
+                return "unavailable"
+            return "configured"
+        finally:
+            db.close()
+    except Exception:
+        return "not_configured"
 
 
 origins = settings.CORS_ORIGINS or ["*"]

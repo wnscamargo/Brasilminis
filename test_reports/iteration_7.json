@@ -1,0 +1,25 @@
+{
+  "summary": "Central de Integrações (MP + Melhor Envio) validado backend + frontend via URL pública. Backend pytest 10/10 (test_integrations_api.py) cobrindo: /admin/integrations com ambas as chaves; ME credenciais save/get com secret mascarado (••••••) e nunca em texto puro; troca sandbox→production limpa sessão OAuth; auth-url contém apenas os 6 scopes válidos (sem shipping-cancel/tracking); MP save em test com is_enabled=true, access_token mascarado (••••••••••) e nunca em texto puro; /mercado-pago/public-key retorna 503 quando não configurado e {public_key, environment, enabled} quando configurado; gating de produção (is_enabled=false após save prod; activate {confirm:true} → 400 em pt exigindo teste antes); troca test→production limpa public_key/access_token e desativa; e criação de pedido em modo SIMULADO (MP desconectado) com payment.requires_payment=false e pedido persistido em /api/orders. Frontend Playwright: login admin OK, sidebar tem 'Integrações' (link ativo), /admin/integracoes renderiza título 'Central de Integrações' + cards mp-integration-card e me-integration-card com badge de ambiente, status, seletor de ambiente e todos os campos com data-testid. ME: save persiste, campo Client Secret é type=password, valor é limpo após save (não reexibido), status='Não conectado' e me-connect-btn aparece; troca de ambiente para 'Produção' via window.confirm resulta em badge='Produção'. MP: save test → status='Configurado' + mp-enabled-flag visível; access token é type=password; troca para 'Produção' via confirm → badge='Produção', public_key limpo, mp-activate-btn NÃO aparece (gating visual correto - só exibe quando status=connected). Cleanup: MP desconectado ao final (status=not_configured confirmado via API).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_integrations_api.py",
+    "/app/test_reports/pytest/integrations.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "payments.py /api/admin/integrations mescla status()+get_credentials() para melhor_envio; ambos retornam 'environment' — não conflita mas duplicidade é frágil; ok como está.",
+    "mercado_pago_service.save_settings: em test env, is_enabled só é definido como True se cliente passar is_enabled=True; documentar isso (schema tem default False). Frontend AdminIntegracoes envia is_enabled=true no save de test, funciona.",
+    "AdminIntegracoes.js: quando switch de ME para 'Produção' via confirm, redirect_uri é preservado no backend mas o campo do form pode manter valor stale; toast diz 'recadastre credenciais' — ok.",
+    "test_integrations_api.py roda contra o preview PostgreSQL compartilhado; após rodar deixa credenciais MP dummy salvas e depois disconecta na fixture — OK, mas é bom lembrar que testes sobre-escrevem estado se rodados junto com outros suites em paralelo.",
+    "AdminIntegracoes MP card: 'mp-activate-btn' só aparece quando isProd && status==='connected' && !is_enabled — correto e alinhado ao gating do backend. Recomenda-se adicionar uma mensagem visível 'Teste a conexão primeiro' quando isProd && configured && status!=='connected' para melhorar a UX."
+  ],
+  "updated_files": ["/app/backend/tests/test_integrations_api.py"],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (todos os checks)"},
+  "test_credentials": "Admin: admin@brasilminis.com / Admin@2025. MP/ME: apenas dummy strings (TEST-... / cid-frontend-test / SEC-frontend-test-XYZ) — sem credenciais reais no preview conforme esperado.",
+  "seed_data_creation": "Criado cliente de teste TEST_cli_<uuid>@test.com para o teste de checkout simulado. Um pedido foi criado nesse cliente em modo SIMULADO (payment.requires_payment=false). MP foi desconectado ao final (limpeza).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Rode o backend suite com REACT_APP_BACKEND_URL=<preview_url> (a env var precisa estar exportada — pytest não lê frontend/.env automaticamente). Todos os 10 testes passam contra o preview. O teste de checkout simulado depende de haver produto com stock>0 em /api/products (o test filtra automaticamente). Fluxo de card Brick não foi validado (esperado — sem credenciais reais MP). PIX real e webhook HMAC estão cobertos por tests/test_mercado_pago.py via respx.",
+  "rca of the issue": "Nenhum bug encontrado. Todos os requisitos da review request foram atendidos: cifragem de secret/token, mascaramento em GET, troca de ambiente com isolamento, scopes OAuth corretos, gating explícito de produção MP, /public-key com 503 quando não configurado, checkout SIMULADO quando MP desconectado, e frontend renderiza todos os data-testids esperados com comportamento correto de confirm dialogs."
+}
