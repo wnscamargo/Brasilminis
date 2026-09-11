@@ -6,17 +6,22 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_db
 from app.models import Brand, Category, Product
+from app.services import category_service
 from app.utils import to_dict
 
 router = APIRouter(prefix="/api", tags=["catalog"])
 
+PUBLIC_EXCLUDE = ("cost_price",)  # custo NUNCA é exposto publicamente
+
 
 @router.get("/categories")
-def list_categories(group: Optional[str] = None, db: Session = Depends(get_db)):
-    q = db.query(Category)
+def list_categories(group: Optional[str] = None, tree: bool = False, db: Session = Depends(get_db)):
+    if tree:
+        return category_service.build_tree(db, only_active=True)
+    q = db.query(Category).filter(Category.is_active.is_(True))
     if group:
         q = q.filter(Category.group == group)
-    return [to_dict(c) for c in q.order_by(Category.name.asc()).all()]
+    return [to_dict(c) for c in q.order_by(Category.sort_order.asc(), Category.name.asc()).all()]
 
 
 @router.get("/categories/{slug}")
@@ -87,7 +92,7 @@ def list_products(
 
     total = q.count()
     items = q.order_by(order_by).offset((page - 1) * limit).limit(limit).all()
-    return {"total": total, "page": page, "limit": limit, "items": [to_dict(p) for p in items]}
+    return {"total": total, "page": page, "limit": limit, "items": [to_dict(p, exclude=PUBLIC_EXCLUDE) for p in items]}
 
 
 @router.get("/products/{slug}")
@@ -97,7 +102,7 @@ def get_product(slug: str, db: Session = Depends(get_db)):
         product = db.get(Product, slug)
     if not product:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
-    return to_dict(product)
+    return to_dict(product, exclude=PUBLIC_EXCLUDE)
 
 
 @router.get("/products/{slug}/related")
@@ -110,4 +115,4 @@ def related_products(slug: str, db: Session = Depends(get_db)):
         Product.id != product.id,
         or_(Product.category == product.category, Product.brand == product.brand),
     )
-    return [to_dict(p) for p in q.limit(8).all()]
+    return [to_dict(p, exclude=PUBLIC_EXCLUDE) for p in q.limit(8).all()]
