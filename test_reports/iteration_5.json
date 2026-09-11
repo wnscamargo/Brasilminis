@@ -1,0 +1,44 @@
+{
+  "summary": "Full backend + frontend E2E of the structural evolution (hierarchical categories, cost_price, product images, order CMV snapshots, analytics dashboard). Added a dedicated pytest suite (30 new tests) and re-ran the full 50-test regression suite. Manually verified: hierarchical categories admin UI (create main + sub, tree, product count), product modal with cost + main/subcategory + margin display (R$60,00 · 60.00%), image URL add + upload PNG (multipart) + set primary + delete inside edit modal, dashboard with all KPIs, rankings and all period filters (today/7d/30d/this_month/last_month/custom), cost warning shown, storefront regression intact (home + /produtos catalog + product page with images, cost_price never leaked to public HTML).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin (Dashboard) custom period picker", "issues": ["Uses browser native <input type='date'> for custom-start/custom-end (locale-dependent format, e.g. 12/31/2030 on en-US). Consider using a shadcn/Calendar component for consistency with the rest of admin UI."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_new_features.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/new_features.xml",
+    "/app/test_reports/pytest/regression.xml"
+  ],
+  "action_items": [
+    "REGRESSION FIX APPLIED by testing agent: /app/backend/app/services/coupon_service.py line 21 — `subtotal * coupon.value / 100` was crashing with `TypeError: unsupported operand type(s) for *: 'float' and 'decimal.Decimal'` after the Decimal migration (coupon.value is Numeric/Decimal, subtotal is float). Fix: cast to float(coupon.value). Please review + keep. Without this, ANY checkout with a percent-coupon (BRASIL10 / MINIS20) returned 500.",
+    "Optional: replace native date inputs in Dashboard (custom-start/custom-end) with the existing shadcn Calendar component for consistency."
+  ],
+  "critical_code_review_comments": [
+    "coupon_service.resolve_coupon mixed Decimal and float arithmetic → 500 on coupon checkout. Fixed by testing agent.",
+    "analytics_service.compute(): 'net_revenue' is computed as `revenue_gross - discounts + shipping_charged`. The naming may confuse users — it's really 'revenue after discount + shipping charged'. Consider renaming or adding a tooltip; not a functional bug.",
+    "order_service creates items list on the ORM Order.items JSON column but relies on to_dict to expose. The frozen CMV snapshots (unit_cost_snapshot, line_cogs, line_gross_profit, has_cost) are correctly stored inside the JSON items — customers see them on GET /api/orders too. If the spec requires hiding CMV even from customer order responses (leakage), the storefront /api/orders returns the full items JSON including line_cogs/unit_cost_snapshot. Confirm intended visibility — the spec only mandates hiding cost_price from public catalog, so this is OK per spec but worth confirming with product.",
+    "AdminProducts NEW modal has no product-images-section because the product must exist first (images endpoints need product_id). This is expected but the flow could be improved by allowing image staging on create."
+  ],
+  "updated_files": [
+    "/app/backend/app/services/coupon_service.py",
+    "/app/backend/tests/test_new_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (30/30 new + 50/50 regression after coupon fix)",
+    "frontend": "100% (dashboard, categorias, produtos w/ cost+margin, images add/upload/primary/delete, storefront regression)"
+  },
+  "test_credentials": "admin@brasilminis.com / Admin@2025 (seed). Customer sessions auto-registered as TEST_<hex>@example.com / senha123.",
+  "seed_data_creation": "During tests we created some TEST_* categories (TEST Main, TEST Main2, TEST Sub Moved, TEST UI <ts>), TEST cost products (used for CMV validation) and TEST no-cost product. A handful of new orders were placed by TEST customer sessions and by admin (concurrent oversell test). Item counts in /admin/produtos and /admin/categorias will show these entries. No production data was deleted.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend suite lives in /app/backend/tests/{backend_test.py, test_new_features.py} — both green. When running locally, export REACT_APP_BACKEND_URL=<preview-url> before pytest. Frontend data-testids to remember: dashboard KPIs kpi-{revenue,net-revenue,cogs,profit,margin,ticket,orders,sold}; period-{today,7d,30d,this_month,last_month,custom}; custom-start/custom-end/apply-custom; rank-{prod-revenue,prod-profit,categories,subcategories,bestsellers,low-margin}; cost-warning. Categories: new-category-btn, cat-name, save-category-btn, admin-category-{id}, admin-subcategory-{id}, add-sub-{id}, edit-{id}, toggle-{id}. Products: new-product-btn, edit-product-{id}, delete-product-{id}, product-modal, pf-name, pf-price, pf-cost, pf-main-category, pf-subcategory, pf-margin, save-product-btn, margin-{id}; images: product-images-section, img-url-input, add-img-url-btn, upload-img-input (hidden — use set_input_files), prod-img-{id}, set-primary-{id}, del-img-{id}. Login: press Enter on password (as in prior iterations); button click doesn't always submit in Playwright. Note: after admin login the app first redirects to /conta — must goto('/admin') explicitly.",
+  "rca of the issue": "Only issue found: 500 on POST /api/orders when a percent-coupon (BRASIL10/MINIS20) was applied. Root cause: recent CMV migration converted product.price/cost/order fields to Decimal AND the subtotal path in order_service uses `float(subtotal)` when calling resolve_coupon; but coupon.value stayed as Decimal (Numeric column) and the multiplication `subtotal_float * coupon.value_decimal` raised TypeError at coupon_service.py line 21. Mitigation applied: cast `float(coupon.value)` before the multiplication. Verified fix by re-running the regression test test_order_with_coupon_and_shipping → PASS after backend restart."
+}

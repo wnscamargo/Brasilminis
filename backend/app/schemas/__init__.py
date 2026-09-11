@@ -55,9 +55,16 @@ class Address(BaseModel):
 class CategoryInput(BaseModel):
     name: str
     slug: Optional[str] = None
-    group: str  # miniaturas | colecionaveis | acessorios | vestuario | presentes
+    parent_id: Optional[str] = None  # None => categoria principal
+    group: Optional[str] = None      # compat (derivado automaticamente)
+    is_active: bool = True
+    sort_order: int = 0
     image: Optional[str] = ""
     description: Optional[str] = ""
+
+
+class CategoryReorderInput(BaseModel):
+    ids: List[str]  # nova ordem (sort_order = índice)
 
 
 class BrandInput(BaseModel):
@@ -71,10 +78,13 @@ class ProductInput(BaseModel):
     name: str
     slug: Optional[str] = None
     description: str = ""
-    price: float
-    compare_at_price: Optional[float] = None
-    category: str  # category slug
-    group: Optional[str] = ""
+    price: float = Field(ge=0)
+    compare_at_price: Optional[float] = Field(default=None, ge=0)
+    cost_price: Optional[float] = Field(default=None, ge=0)  # None => não informado
+    category: Optional[str] = ""   # slug da subcategoria (compat)
+    group: Optional[str] = ""      # slug da categoria principal (compat)
+    main_category_id: Optional[str] = None
+    subcategory_id: Optional[str] = None
     brand: Optional[str] = ""  # brand slug
     images: List[str] = []
     stock: int = 0
@@ -82,6 +92,24 @@ class ProductInput(BaseModel):
     specs: dict = {}
     featured: bool = False
     is_active: bool = True
+
+
+# ---------- Product images ----------
+class ProductImageUrlInput(BaseModel):
+    url: str
+    is_primary: bool = False
+
+    @field_validator("url")
+    @classmethod
+    def _validate_url(cls, v):
+        v = (v or "").strip()
+        if not (v.startswith("http://") or v.startswith("https://")):
+            raise ValueError("URL deve começar com http:// ou https://")
+        return v
+
+
+class ImageReorderInput(BaseModel):
+    ids: List[str]
 
 
 # ---------- Reviews ----------

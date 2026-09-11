@@ -35,8 +35,9 @@ app.include_router(banners.router)
 app.include_router(site.router)
 app.include_router(admin.router)
 
-# Uploads persistentes (identidade visual, etc.) servidos sob /api/uploads.
+# Uploads persistentes (identidade visual, imagens de produto) servidos sob /api/uploads.
 os.makedirs(os.path.join(settings.UPLOADS_DIR, "branding"), exist_ok=True)
+os.makedirs(os.path.join(settings.UPLOADS_DIR, "products"), exist_ok=True)
 app.mount("/api/uploads", StaticFiles(directory=settings.UPLOADS_DIR), name="uploads")
 
 

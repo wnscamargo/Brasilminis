@@ -155,3 +155,30 @@ Fallback: sem logo_url => usa a logo padrão institucional (/brasil-minis-logo.p
 Testes: backend TestSiteBranding (4 casos) — suíte 50/50 pytest PASS. Frontend E2E (testing_agent): 100% (9/9), 0 issues. Estado final: logo padrão (fallback) + manutenção desativada.
 Deploy VPS: criar UPLOADS_DIR persistente e setar no .env; deploy.sh já roda `alembic upgrade head` (aplica 455b5d4bbb3e). Opcional: servir /api/uploads direto pelo Nginx com cache (não obrigatório).
 Extensível: coluna branding (JSONB) pronta p/ favicon, logos dark/light, cores, OG, store_name.
+
+---
+## Evolução: Categorias hierárquicas + Custo/CMV + Imagens de produto — Junho/2026
+Evolução estrutural (stack mantida: FastAPI + SQLAlchemy + PostgreSQL + Alembic + React). Migration Alembic `c1f2a3b4d5e6` (não-destrutiva). Nada de tecnologia migrada, banco não resetado.
+
+### Backend
+- **Modelos** (`app/models/__init__.py`): `Category` +parent_id (FK self), is_active, sort_order, created_at, updated_at (hierarquia 2 níveis; group = slug da principal p/ compat). `Product` price/compare_at_price/cost_price → `Numeric(12,2)`, +main_category_id, +subcategory_id, rating→Numeric. Novas tabelas `ProductImage` (source_type url|upload, url, sort_order, is_primary) e `ProductCostHistory` (old_cost/new_cost/changed_by/changed_at). `Order`/`Coupon` monetários → Numeric. CHECK cost_price>=0.
+- **Serviços**: `category_service` (árvore, criar/editar/mover/ativar, impede ciclo e >2 níveis), `product_image_service` (Pillow valida MIME real+dimensões+tamanho 8MB, nome UUID sem path traversal, sync do cache `product.images`, add URL/upload/primary/reorder/delete), `order_service` (CMV em Decimal: congela unit_cost_snapshot/unit_price_snapshot/line_revenue/line_cogs/line_gross_profit/has_cost por item), `analytics_service` (períodos hoje/7d/30d/este mês/mês anterior/custom; faturamento, descontos, frete, receita líq., CMV, lucro bruto, margem %, ticket médio, nº pedidos, produtos vendidos; rankings top produtos por faturamento/lucro, top categorias/subcategorias, menor margem, mais vendidos; série faturamento×CMV×lucro; sinaliza itens/produtos sem custo — NUNCA inventa CMV).
+- **utils.to_dict**: converte Decimal→float na fronteira JSON. **Público** (`catalog.py`) exclui `cost_price` (PUBLIC_EXCLUDE) em /products, /products/{slug}, /related; `GET /api/categories?tree=true` retorna árvore ativa.
+- **Endpoints admin** (`admin.py`): produtos c/ custo+categoria (deriva main/sub/category/group) + histórico de custo em toda alteração; `GET /products/{id}/cost-history`; imagens `GET/POST /products/{id}/images`, `POST .../images/upload`, `PUT .../images/reorder`, `PUT .../images/{img}/primary`, `DELETE .../images/{img}`; categorias `GET /categories/tree`, `POST/PUT/DELETE /categories`, `PUT /categories/reorder`; `GET /admin/analytics?period=&start=&end=`.
+- **Uploads**: `UPLOADS_DIR/products` (preview: /app/backend/uploads; VPS: /var/www/brasilminis/uploads) servidos em `/api/uploads/products`. Deploy/reboot preservam. `main.py` cria o subdir no boot.
+- **Fix de regressão** (achado pelo testing agent): `coupon_service.resolve_coupon` fazia `float * Decimal` (coupon.value virou Numeric) → 500 em cupom percentual. Corrigido com `float(coupon.value)`.
+
+### Frontend
+- `pages/admin/AdminCategories.js` — árvore (principal → subcategorias), criar principal/sub, editar, ativar/desativar, mover subcategoria, contadores de produto.
+- `pages/admin/AdminProducts.js` — modal c/ Custo + Categoria principal/Subcategoria (sub filtrada), preview de Lucro/Margem; tabela c/ colunas Custo e Margem ("sem custo" quando NULL); seção Imagens (miniaturas, add URL, enviar arquivo, tornar principal, mover, excluir) disponível ao editar.
+- `pages/admin/Dashboard.js` — filtros de período, 8 KPIs, aviso de custo ausente, resultado produtos×frete×descontos, gráfico Faturamento×CMV×Lucro, 6 rankings.
+
+### Testes
+- `backend/tests/test_new_features.py` (30 casos) + `backend_test.py` (50 regressão) = 100% PASS. Frontend E2E (testing_agent) 100%. Cobre categorias/ciclos, custo Decimal, custo oculto no público, histórico de custo, snapshot de CMV (custo antigo não recalcula), produto sem custo, dashboard por período, rankings, uploads JPG/PNG/WEBP, MIME/tamanho/path traversal rejeitados, URL+upload coexistem, principal/reorder/delete, regressão checkout/estoque/pedidos/identidade/manutenção/health.
+- Preview limpo pós-teste: 28 produtos (26 c/ custo ~55%, 2 sem custo: Gift Card e Mystery Box), 29 categorias (5 principais + 24 sub), 0 pedidos.
+
+### Deploy VPS
+- `deploy.sh` já roda `alembic upgrade head` (aplica c1f2a3b4d5e6). Garantir `UPLOADS_DIR=/var/www/brasilminis/uploads` no `.env` e subdir `products` (criado automaticamente pelo backend). Sem create_all, sem reset de banco, sem apagar uploads.
+
+### Backlog remanescente (P1/P2)
+- Opcional: trocar `<input type=date>` do período personalizado por shadcn Calendar. Correios/Melhor Envio, Mercado Pago real, histórico de status de pedido (aguardando validação do usuário na VPS).

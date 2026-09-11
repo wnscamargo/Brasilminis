@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import hash_password, verify_password
-from app.models import Banner, Brand, Category, Coupon, Product, SiteSettings, User
+from app.models import Banner, Brand, Category, Coupon, Product, ProductImage, SiteSettings, User
+from app.services.product_image_service import seed_images_from_urls
 from app.utils import slugify
 
 IMG = {
@@ -70,6 +71,19 @@ BRANDS = [
     "Hot Wheels", "Matchbox", "Mini GT", "Inno64", "Kaido House",
     "Tomica", "Greenlight", "Majorette", "Tarmac Works", "M2 Machines",
 ]
+
+# Rótulos das categorias PRINCIPAIS (nível topo). O slug da principal == group.
+GROUP_LABELS = {
+    "miniaturas": "Miniaturas",
+    "colecionaveis": "Colecionáveis",
+    "acessorios": "Acessórios",
+    "vestuario": "Vestuário",
+    "presentes": "Presentes",
+}
+GROUP_ORDER = ["miniaturas", "colecionaveis", "acessorios", "vestuario", "presentes"]
+
+# Produtos que NÃO recebem custo no seed (demonstram o tratamento "sem custo").
+NO_COST_SLUGS = {"gift-card", "mystery-box-colecionador"}
 
 
 def _product(name, price, category, group, brand, imgs, stock, badges, compare=None, featured=False, desc="", specs=None):
@@ -194,10 +208,27 @@ def seed_admin(db: Session):
 
 def seed_data(db: Session):
     if (db.query(func.count(Category.id)).scalar() or 0) == 0:
-        db.add_all([
-            Category(id=str(uuid.uuid4()), name=name, slug=slugify(name), group=group, description=desc, image="")
-            for name, group, desc in CATEGORIES
-        ])
+        now = datetime.now(timezone.utc).isoformat()
+        # 1) Categorias PRINCIPAIS (nível topo): slug == group.
+        parents = {}
+        for i, g in enumerate(GROUP_ORDER):
+            parent = Category(
+                id=str(uuid.uuid4()), name=GROUP_LABELS[g], slug=g, group=g,
+                parent_id=None, is_active=True, sort_order=i,
+                description=f"Categoria {GROUP_LABELS[g]}.", image="",
+                created_at=now, updated_at=now,
+            )
+            parents[g] = parent
+            db.add(parent)
+        db.flush()
+        # 2) Subcategorias vinculadas ao pai correspondente.
+        for j, (name, group, desc) in enumerate(CATEGORIES):
+            parent = parents.get(group)
+            db.add(Category(
+                id=str(uuid.uuid4()), name=name, slug=slugify(name), group=group,
+                parent_id=parent.id if parent else None, is_active=True, sort_order=j,
+                description=desc, image="", created_at=now, updated_at=now,
+            ))
         db.commit()
 
     if (db.query(func.count(Brand.id)).scalar() or 0) == 0:
@@ -208,7 +239,27 @@ def seed_data(db: Session):
         db.commit()
 
     if (db.query(func.count(Product.id)).scalar() or 0) == 0:
-        db.add_all(_build_products())
+        cat_by_slug = {c.slug: c for c in db.query(Category).all()}
+        products = _build_products()
+        for p in products:
+            # Vincula FKs de categoria principal/subcategoria.
+            sub = cat_by_slug.get(p.category)
+            if sub:
+                p.subcategory_id = sub.id
+                p.main_category_id = sub.parent_id
+            main = cat_by_slug.get(p.group)
+            if main and not p.main_category_id:
+                p.main_category_id = main.id
+            # Custo congela margem realista (~45%); alguns ficam sem custo de propósito.
+            if p.slug in NO_COST_SLUGS:
+                p.cost_price = None
+            else:
+                p.cost_price = round(float(p.price) * 0.55, 2)
+        db.add_all(products)
+        db.flush()
+        # Cria as linhas product_images a partir das URLs do seed.
+        for p in products:
+            seed_images_from_urls(db, p.id, list(p.images or []))
         db.commit()
 
     if (db.query(func.count(Banner.id)).scalar() or 0) == 0:

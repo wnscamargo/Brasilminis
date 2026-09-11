@@ -5,8 +5,9 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
-    Float,
+    ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
 )
@@ -37,13 +38,19 @@ class User(Base):
 
 
 class Category(Base):
+    """Categoria hierárquica. parent_id=None => categoria principal; caso contrário, subcategoria."""
     __tablename__ = "categories"
     id = Column(String, primary_key=True, default=_uuid)
     name = Column(String, nullable=False)
     slug = Column(String, unique=True, nullable=False, index=True)
-    group = Column(String, nullable=False, index=True)
+    group = Column(String, nullable=False, index=True)  # compat: grupo de topo (= slug da principal)
+    parent_id = Column(String, ForeignKey("categories.id"), nullable=True, index=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0)
     image = Column(String, default="")
     description = Column(Text, default="")
+    created_at = Column(String, default=_now_iso)
+    updated_at = Column(String, nullable=True)
 
 
 class Brand(Base):
@@ -61,16 +68,19 @@ class Product(Base):
     name = Column(String, nullable=False)
     slug = Column(String, unique=True, nullable=False, index=True)
     description = Column(Text, default="")
-    price = Column(Float, nullable=False)
-    compare_at_price = Column(Float, nullable=True)
-    category = Column(String, default="", index=True)  # slug da categoria
-    group = Column(String, default="", index=True)
+    price = Column(Numeric(12, 2), nullable=False)
+    compare_at_price = Column(Numeric(12, 2), nullable=True)
+    cost_price = Column(Numeric(12, 2), nullable=True)  # None => custo ainda não informado
+    category = Column(String, default="", index=True)  # slug da subcategoria (compat)
+    group = Column(String, default="", index=True)     # slug da categoria principal (compat)
+    main_category_id = Column(String, index=True, nullable=True)
+    subcategory_id = Column(String, index=True, nullable=True)
     brand = Column(String, default="", index=True)  # slug da marca
-    images = Column(JSONB, default=list)
+    images = Column(JSONB, default=list)  # cache denormalizado (ordenado) para o storefront
     stock = Column(Integer, default=0)
     badges = Column(JSONB, default=list)
     specs = Column(JSONB, default=dict)
-    rating = Column(Float, default=0)
+    rating = Column(Numeric(3, 2), default=0)
     reviews_count = Column(Integer, default=0)
     featured = Column(Boolean, default=False, index=True)
     is_active = Column(Boolean, default=True, index=True)
@@ -78,7 +88,29 @@ class Product(Base):
 
     __table_args__ = (
         CheckConstraint("stock >= 0", name="ck_products_stock_non_negative"),
+        CheckConstraint("cost_price IS NULL OR cost_price >= 0", name="ck_products_cost_non_negative"),
     )
+
+
+class ProductImage(Base):
+    __tablename__ = "product_images"
+    id = Column(String, primary_key=True, default=_uuid)
+    product_id = Column(String, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_type = Column(String, nullable=False, default="url")  # url | upload
+    url = Column(String, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_primary = Column(Boolean, nullable=False, default=False)
+    created_at = Column(String, default=_now_iso)
+
+
+class ProductCostHistory(Base):
+    __tablename__ = "product_cost_history"
+    id = Column(String, primary_key=True, default=_uuid)
+    product_id = Column(String, index=True, nullable=False)
+    old_cost = Column(Numeric(12, 2), nullable=True)
+    new_cost = Column(Numeric(12, 2), nullable=True)
+    changed_by = Column(String, nullable=True)
+    changed_at = Column(String, default=_now_iso)
 
 
 class Favorite(Base):
@@ -102,8 +134,8 @@ class Coupon(Base):
     __tablename__ = "coupons"
     code = Column(String, primary_key=True)
     type = Column(String, nullable=False)  # percent | fixed
-    value = Column(Float, nullable=False)
-    min_order = Column(Float, default=0)
+    value = Column(Numeric(12, 2), nullable=False)
+    min_order = Column(Numeric(12, 2), default=0)
     active = Column(Boolean, default=True)
     description = Column(String, default="")
 
@@ -115,13 +147,13 @@ class Order(Base):
     user_id = Column(String, nullable=False, index=True)
     user_name = Column(String)
     user_email = Column(String)
-    items = Column(JSONB, default=list)
-    subtotal = Column(Float)
-    discount = Column(Float, default=0)
+    items = Column(JSONB, default=list)  # inclui snapshots de custo/preço por linha
+    subtotal = Column(Numeric(12, 2))
+    discount = Column(Numeric(12, 2), default=0)
     coupon = Column(String, nullable=True)
-    shipping = Column(Float, default=0)
+    shipping = Column(Numeric(12, 2), default=0)
     shipping_method = Column(String)
-    total = Column(Float)
+    total = Column(Numeric(12, 2))
     payment_method = Column(String)
     payment_status = Column(String)
     status = Column(String, index=True)

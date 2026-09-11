@@ -18,7 +18,7 @@ def resolve_coupon(db: Session, code: str, subtotal: float):
             detail=f"Pedido mínimo de R$ {coupon.min_order:.2f} para este cupom",
         )
     if coupon.type == "percent":
-        discount = round(subtotal * coupon.value / 100, 2)
+        discount = round(subtotal * float(coupon.value) / 100, 2)
     else:
         discount = float(coupon.value)
     return min(discount, subtotal), coupon.code
