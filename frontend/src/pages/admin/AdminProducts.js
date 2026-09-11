@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Plus, Pencil, Trash2, X, Search, Star, Upload, Link as LinkIcon, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Search, Star, Upload, Link as LinkIcon, ArrowUp, ArrowDown, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
 import { formatBRL } from "@/lib/brand";
 
 const BADGES = ["NOVO", "LANÇAMENTO", "PROMOÇÃO", "TREASURE HUNT", "SUPER TH", "PREMIUM", "EDIÇÃO LIMITADA", "PRÉ-VENDA", "FRETE GRÁTIS"];
-const EMPTY = { name: "", description: "", price: "", compare_at_price: "", cost_price: "", main_category_id: "", subcategory_id: "", brand: "", images: "", stock: 0, badges: [], featured: false, is_active: true, specs: {} };
+const EMPTY = { name: "", description: "", price: "", compare_at_price: "", cost_price: "", main_category_id: "", subcategory_id: "", brand: "", images: "", stock: 0, weight_kg: "", width_cm: "", height_cm: "", length_cm: "", sku: "", barcode: "", badges: [], featured: false, is_active: true, specs: {} };
 
 function margin(price, cost) {
   const p = parseFloat(price), c = parseFloat(cost);
@@ -82,7 +82,7 @@ export default function AdminProducts() {
                     <td className="p-4"><span className={p.stock <= 5 ? "text-[#FFC107]" : "text-gray-300"}>{p.stock}</span></td>
                     <td className="p-4">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => setEditing({ ...p, cost_price: p.cost_price ?? "", compare_at_price: p.compare_at_price ?? "", main_category_id: p.main_category_id || "", subcategory_id: p.subcategory_id || "", images: "", specs: p.specs || {} })} data-testid={`edit-product-${p.id}`} className="p-2 rounded-lg text-gray-400 hover:text-[#FFC107] hover:bg-white/5"><Pencil size={16} /></button>
+                        <button onClick={() => setEditing({ ...p, cost_price: p.cost_price ?? "", compare_at_price: p.compare_at_price ?? "", main_category_id: p.main_category_id || "", subcategory_id: p.subcategory_id || "", weight_kg: p.weight_kg ?? "", width_cm: p.width_cm ?? "", height_cm: p.height_cm ?? "", length_cm: p.length_cm ?? "", sku: p.sku ?? "", barcode: p.barcode ?? "", images: "", specs: p.specs || {} })} data-testid={`edit-product-${p.id}`} className="p-2 rounded-lg text-gray-400 hover:text-[#FFC107] hover:bg-white/5"><Pencil size={16} /></button>
                         <button onClick={() => del(p.id)} data-testid={`delete-product-${p.id}`} className="p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-white/5"><Trash2 size={16} /></button>
                       </div>
                     </td>
@@ -109,6 +109,7 @@ function ProductModal({ data, tree, brands, onClose, onSaved }) {
   const mainCat = tree.find((c) => c.id === form.main_category_id);
   const subs = mainCat?.children || [];
   const m = margin(form.price, form.cost_price);
+  const shipIncomplete = ![form.weight_kg, form.width_cm, form.height_cm, form.length_cm].every((v) => v !== "" && v != null && parseFloat(v) > 0);
 
   const toggleBadge = (b) => setForm((f) => ({ ...f, badges: f.badges.includes(b) ? f.badges.filter((x) => x !== b) : [...f.badges, b] }));
 
@@ -126,6 +127,12 @@ function ProductModal({ data, tree, brands, onClose, onSaved }) {
       subcategory_id: form.subcategory_id || null,
       brand: form.brand || "",
       stock: parseInt(form.stock) || 0,
+      weight_kg: form.weight_kg !== "" && form.weight_kg != null ? parseFloat(form.weight_kg) : null,
+      width_cm: form.width_cm !== "" && form.width_cm != null ? parseFloat(form.width_cm) : null,
+      height_cm: form.height_cm !== "" && form.height_cm != null ? parseFloat(form.height_cm) : null,
+      length_cm: form.length_cm !== "" && form.length_cm != null ? parseFloat(form.length_cm) : null,
+      sku: form.sku || null,
+      barcode: form.barcode || null,
       badges: form.badges, specs, featured: form.featured, is_active: form.is_active,
       images: data.id ? [] : String(form.images || "").split(",").map((s) => s.trim()).filter(Boolean),
     };
@@ -181,6 +188,21 @@ function ProductModal({ data, tree, brands, onClose, onSaved }) {
           <TInput label="Estoque" type="number" value={form.stock} onChange={(v) => setForm({ ...form, stock: v })} testid="pf-stock" />
           {!data.id && <TInput label="Imagens iniciais (URLs por vírgula)" value={form.images} onChange={(v) => setForm({ ...form, images: v })} full testid="pf-images" />}
           <TArea label="Especificações (uma por linha: Chave: Valor)" value={specText} onChange={setSpecText} full testid="pf-specs" />
+        </div>
+
+        <div className="mt-5 border-t border-[#2e2e2e] pt-5">
+          <div className="flex items-center justify-between mb-3">
+            <label className="text-xs text-gray-500 uppercase font-bold tracking-wide">Dados logísticos (frete)</label>
+            {shipIncomplete && <span data-testid="ship-incomplete-alert" className="text-xs text-[#FFC107] flex items-center gap-1"><AlertTriangle size={13} /> Dados de frete incompletos</span>}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <TInput label="Peso (kg)" type="number" step="0.001" value={form.weight_kg} onChange={(v) => setForm({ ...form, weight_kg: v })} testid="pf-weight" />
+            <TInput label="Largura (cm)" type="number" step="0.1" value={form.width_cm} onChange={(v) => setForm({ ...form, width_cm: v })} testid="pf-width" />
+            <TInput label="Altura (cm)" type="number" step="0.1" value={form.height_cm} onChange={(v) => setForm({ ...form, height_cm: v })} testid="pf-height" />
+            <TInput label="Comprimento (cm)" type="number" step="0.1" value={form.length_cm} onChange={(v) => setForm({ ...form, length_cm: v })} testid="pf-length" />
+            <TInput label="SKU (opcional)" value={form.sku} onChange={(v) => setForm({ ...form, sku: v })} testid="pf-sku" />
+            <TInput label="Código de barras (opcional)" value={form.barcode} onChange={(v) => setForm({ ...form, barcode: v })} testid="pf-barcode" />
+          </div>
         </div>
 
         <div className="mt-4">

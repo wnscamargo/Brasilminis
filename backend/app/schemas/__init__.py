@@ -88,6 +88,12 @@ class ProductInput(BaseModel):
     brand: Optional[str] = ""  # brand slug
     images: List[str] = []
     stock: int = 0
+    weight_kg: Optional[float] = Field(default=None, ge=0)
+    width_cm: Optional[float] = Field(default=None, ge=0)
+    height_cm: Optional[float] = Field(default=None, ge=0)
+    length_cm: Optional[float] = Field(default=None, ge=0)
+    sku: Optional[str] = None
+    barcode: Optional[str] = None
     badges: List[str] = []
     specs: dict = {}
     featured: bool = False
@@ -130,6 +136,33 @@ class CheckoutInput(BaseModel):
     payment_method: str = "pix"  # pix | card | boleto
     coupon: Optional[str] = None
     address: Optional[Address] = None
+    # Melhor Envio: cotação selecionada (congelada no pedido)
+    quote_id: Optional[str] = None
+    shipping_service_id: Optional[int] = None
+    recipient_document: Optional[str] = None
+    recipient_phone: Optional[str] = None
+
+
+# ---------- Melhor Envio ----------
+class ShippingQuoteInput(BaseModel):
+    postal_code: str
+    items: List[OrderItemInput]
+
+
+class SenderInput(BaseModel):
+    name: Optional[str] = None
+    company: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    document: Optional[str] = None
+    state_register: Optional[str] = None
+    postal_code: Optional[str] = None
+    address: Optional[str] = None
+    number: Optional[str] = None
+    complement: Optional[str] = None
+    district: Optional[str] = None
+    city: Optional[str] = None
+    state_abbr: Optional[str] = None
 
 
 class CouponValidateInput(BaseModel):

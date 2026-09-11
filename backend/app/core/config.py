@@ -22,6 +22,31 @@ class Settings:
     FREE_SHIPPING_THRESHOLD: float = float(os.environ.get("FREE_SHIPPING_THRESHOLD", "300"))
     STANDARD_SHIPPING: float = float(os.environ.get("STANDARD_SHIPPING", "29.90"))
 
+    # ----- Melhor Envio (FASE SANDBOX; produção não ativada) -----
+    MELHOR_ENVIO_ENV: str = os.environ.get("MELHOR_ENVIO_ENV", "sandbox")
+    MELHOR_ENVIO_CLIENT_ID: str = os.environ.get("MELHOR_ENVIO_CLIENT_ID", "")
+    MELHOR_ENVIO_CLIENT_SECRET: str = os.environ.get("MELHOR_ENVIO_CLIENT_SECRET", "")
+    MELHOR_ENVIO_REDIRECT_URI: str = os.environ.get("MELHOR_ENVIO_REDIRECT_URI", "")
+    MELHOR_ENVIO_USER_AGENT_EMAIL: str = os.environ.get("MELHOR_ENVIO_USER_AGENT_EMAIL", "contato@brasilminis.com")
+    MELHOR_ENVIO_TOKEN_ENCRYPTION_KEY: str = os.environ.get("MELHOR_ENVIO_TOKEN_ENCRYPTION_KEY", "")
+    FRONTEND_URL: str = os.environ.get("FRONTEND_URL", "")
+
+    @property
+    def MELHOR_ENVIO_BASE_URL(self) -> str:
+        return (
+            "https://sandbox.melhorenvio.com.br"
+            if (self.MELHOR_ENVIO_ENV or "sandbox").lower() == "sandbox"
+            else "https://melhorenvio.com.br"
+        )
+
+    @property
+    def MELHOR_ENVIO_USER_AGENT(self) -> str:
+        return f"Brasil Minis ({self.MELHOR_ENVIO_USER_AGENT_EMAIL})"
+
+    @property
+    def MELHOR_ENVIO_CONFIGURED(self) -> bool:
+        return bool(self.MELHOR_ENVIO_CLIENT_ID and self.MELHOR_ENVIO_CLIENT_SECRET and self.MELHOR_ENVIO_REDIRECT_URI)
+
     # Armazenamento persistente de uploads (NUNCA dentro de frontend/build).
     # Preview: backend/uploads (persiste em /app). VPS: /var/www/brasilminis/uploads.
     UPLOADS_DIR: str = os.environ.get(

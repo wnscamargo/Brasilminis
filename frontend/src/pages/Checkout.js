@@ -22,6 +22,13 @@ export default function Checkout() {
   const [discount, setDiscount] = useState(0);
   const [placing, setPlacing] = useState(false);
   const [done, setDone] = useState(null);
+  // Melhor Envio
+  const [recipientDoc, setRecipientDoc] = useState("");
+  const [recipientPhone, setRecipientPhone] = useState(user?.phone || "");
+  const [shipOptions, setShipOptions] = useState(null);
+  const [quoteId, setQuoteId] = useState(null);
+  const [selectedShip, setSelectedShip] = useState(null);
+  const [calculating, setCalculating] = useState(false);
 
   if (!user) {
     return (
@@ -42,8 +49,29 @@ export default function Checkout() {
     );
   }
 
-  const shipping = subtotal - discount >= 300 || subtotal === 0 ? 0 : 29.9;
+  const freeShipping = subtotal - discount >= 300 || subtotal === 0;
+  const shipping = selectedShip ? (freeShipping ? 0 : selectedShip.price) : (freeShipping ? 0 : 29.9);
   const total = subtotal - discount + shipping;
+
+  const calcShipping = async () => {
+    if (!address.zip) return toast.error("Informe o CEP para calcular o frete");
+    setCalculating(true);
+    setShipOptions(null); setSelectedShip(null); setQuoteId(null);
+    try {
+      const { data } = await api.post("/shipping/quote", {
+        postal_code: address.zip,
+        items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
+      });
+      setShipOptions(data.options);
+      setQuoteId(data.quote_id);
+      if (data.options[0]) setSelectedShip(data.options[0]);
+      toast.success("Frete calculado");
+    } catch (e) {
+      const status = e.response?.status;
+      if (status === 503) toast.error("Frete temporariamente indisponível. Tente novamente.");
+      else toast.error(formatApiError(e.response?.data?.detail));
+    } finally { setCalculating(false); }
+  };
 
   const applyCoupon = async () => {
     if (!couponCode) return;
@@ -71,6 +99,10 @@ export default function Checkout() {
         shipping_method: "standard",
         coupon: coupon?.code || null,
         address,
+        quote_id: quoteId,
+        shipping_service_id: selectedShip?.service_id || null,
+        recipient_document: recipientDoc || null,
+        recipient_phone: recipientPhone || null,
       });
       clearCart();
       setDone(data);
@@ -136,6 +168,33 @@ export default function Checkout() {
               <Input label="Bairro" value={address.district} onChange={(v) => setAddress({ ...address, district: v })} testid="addr-district" />
               <Input label="Cidade" value={address.city} onChange={(v) => setAddress({ ...address, city: v })} testid="addr-city" />
               <Input label="Complemento" value={address.complement} onChange={(v) => setAddress({ ...address, complement: v })} full testid="addr-complement" />
+              <Input label="CPF/CNPJ do destinatário" value={recipientDoc} onChange={setRecipientDoc} testid="addr-document" />
+              <Input label="Telefone" value={recipientPhone} onChange={setRecipientPhone} testid="addr-phone" />
+            </div>
+          </div>
+
+          {/* frete (Melhor Envio) */}
+          <div className="bm-card p-6" data-testid="shipping-card">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h3 className="font-display font-bold text-white uppercase">Frete</h3>
+              <button onClick={calcShipping} disabled={calculating} data-testid="calc-shipping-btn" className="bg-[#1E3A8A] text-white rounded-full px-5 py-2 text-sm font-semibold disabled:opacity-50">{calculating ? "Calculando..." : "Calcular frete"}</button>
+            </div>
+            {!shipOptions && <p className="text-sm text-gray-500">Informe o CEP acima e clique em “Calcular frete” para ver as opções.</p>}
+            {shipOptions && shipOptions.length === 0 && <p className="text-sm text-gray-500">Nenhuma opção de frete disponível para este CEP.</p>}
+            <div className="space-y-2">
+              {(shipOptions || []).map((o) => (
+                <button key={o.service_id} onClick={() => setSelectedShip(o)} data-testid={`ship-option-${o.service_id}`}
+                  className={`w-full flex items-center justify-between gap-3 p-3 rounded-xl border text-left transition-colors ${selectedShip?.service_id === o.service_id ? "border-[#FFC107] bg-[#FFC107]/5" : "border-[#2e2e2e] hover:border-white/30"}`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    {o.company_picture && <img src={o.company_picture} alt="" className="h-6 w-6 object-contain" />}
+                    <div className="min-w-0">
+                      <p className="text-white text-sm font-semibold truncate">{o.company_name} {o.name}</p>
+                      <p className="text-gray-500 text-xs">{o.delivery_time ? `${o.delivery_time} dia(s) úteis` : "prazo indisponível"}</p>
+                    </div>
+                  </div>
+                  <span className="text-[#FFC107] font-bold whitespace-nowrap">{freeShipping ? "Grátis" : formatBRL(o.price)}</span>
+                </button>
+              ))}
             </div>
           </div>
 

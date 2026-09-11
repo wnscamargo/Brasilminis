@@ -34,6 +34,7 @@ import AdminCustomers from "@/pages/admin/AdminCustomers";
 import AdminBanners from "@/pages/admin/AdminBanners";
 import AdminSite from "@/pages/admin/AdminSite";
 import AdminBranding from "@/pages/admin/AdminBranding";
+import AdminMelhorEnvio from "@/pages/admin/AdminMelhorEnvio";
 
 const Shell = ({ children }) => <Layout>{children}</Layout>;
 
@@ -80,6 +81,7 @@ function App() {
                   <Route path="banners" element={<AdminBanners />} />
                   <Route path="site" element={<AdminSite />} />
                   <Route path="identidade" element={<AdminBranding />} />
+                  <Route path="melhor-envio" element={<AdminMelhorEnvio />} />
                 </Route>
               </Routes>
               </MaintenanceGate>
