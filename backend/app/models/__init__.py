@@ -78,6 +78,13 @@ class Product(Base):
     brand = Column(String, default="", index=True)  # slug da marca
     images = Column(JSONB, default=list)  # cache denormalizado (ordenado) para o storefront
     stock = Column(Integer, default=0)
+    # Dados logísticos (Melhor Envio). None => incompleto para cotação.
+    weight_kg = Column(Numeric(8, 3), nullable=True)
+    width_cm = Column(Numeric(8, 2), nullable=True)
+    height_cm = Column(Numeric(8, 2), nullable=True)
+    length_cm = Column(Numeric(8, 2), nullable=True)
+    sku = Column(String, nullable=True)
+    barcode = Column(String, nullable=True)
     badges = Column(JSONB, default=list)
     specs = Column(JSONB, default=dict)
     rating = Column(Numeric(3, 2), default=0)
@@ -153,6 +160,19 @@ class Order(Base):
     coupon = Column(String, nullable=True)
     shipping = Column(Numeric(12, 2), default=0)
     shipping_method = Column(String)
+    # Snapshot do frete congelado no momento do pedido (Melhor Envio)
+    shipping_provider = Column(String, nullable=True)
+    shipping_service_id = Column(Integer, nullable=True)
+    shipping_service_name = Column(String, nullable=True)
+    shipping_company_id = Column(Integer, nullable=True)
+    shipping_company_name = Column(String, nullable=True)
+    shipping_price_customer = Column(Numeric(12, 2), nullable=True)  # cobrado do cliente
+    shipping_price_quoted = Column(Numeric(12, 2), nullable=True)    # custo real cotado
+    shipping_delivery_min = Column(Integer, nullable=True)
+    shipping_delivery_max = Column(Integer, nullable=True)
+    shipping_destination_postal_code = Column(String, nullable=True)
+    shipping_quote_snapshot = Column(JSONB, nullable=True)
+    recipient_snapshot = Column(JSONB, nullable=True)
     total = Column(Numeric(12, 2))
     payment_method = Column(String)
     payment_status = Column(String)
@@ -208,3 +228,92 @@ class SiteSettings(Base):
     branding = Column(JSONB, default=dict)          # extensível: favicon, cores, og, etc.
     updated_at = Column(String, nullable=True)
     updated_by = Column(String, nullable=True)
+
+
+# ================= Melhor Envio (SANDBOX) =================
+class MelhorEnvioToken(Base):
+    """Token OAuth (linha única, id=1). Tokens armazenados CRIPTOGRAFADOS (Fernet)."""
+    __tablename__ = "melhor_envio_tokens"
+    id = Column(Integer, primary_key=True, default=1)
+    access_token_enc = Column(Text, nullable=True)
+    refresh_token_enc = Column(Text, nullable=True)
+    expires_at = Column(String, nullable=True)  # ISO 8601 (UTC)
+    scope = Column(String, nullable=True)
+    token_type = Column(String, nullable=True)
+    account_email = Column(String, nullable=True)  # e-mail da conta ME conectada
+    environment = Column(String, default="sandbox")
+    pending_state = Column(String, nullable=True)  # CSRF state do OAuth em andamento
+    last_error = Column(String, nullable=True)
+    updated_at = Column(String, nullable=True)
+
+
+class MelhorEnvioSender(Base):
+    """Dados do remetente (linha única, id=1). Configurável pelo admin."""
+    __tablename__ = "melhor_envio_sender"
+    id = Column(Integer, primary_key=True, default=1)
+    name = Column(String, default="")
+    company = Column(String, default="")
+    email = Column(String, default="")
+    phone = Column(String, default="")
+    document = Column(String, default="")        # CPF/CNPJ
+    state_register = Column(String, default="")  # IE
+    postal_code = Column(String, default="")
+    address = Column(String, default="")
+    number = Column(String, default="")
+    complement = Column(String, default="")
+    district = Column(String, default="")
+    city = Column(String, default="")
+    state_abbr = Column(String, default="")
+    updated_at = Column(String, nullable=True)
+
+
+class MelhorEnvioShipment(Base):
+    """Ciclo de vida do envio no Melhor Envio (1:1 com o pedido)."""
+    __tablename__ = "melhor_envio_shipments"
+    id = Column(String, primary_key=True, default=_uuid)
+    order_id = Column(String, ForeignKey("orders.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    cart_order_id = Column(String, nullable=True, index=True)  # UUID do frete no carrinho ME
+    protocol = Column(String, nullable=True)
+    # Estado interno: pending | prepared | in_cart | purchased | generated | posted | delivered | cancelled | error
+    internal_status = Column(String, default="pending", index=True)
+    external_status = Column(String, nullable=True)  # status original do ME (não perder)
+    tracking_code = Column(String, nullable=True)
+    label_url = Column(String, nullable=True)
+    price = Column(Numeric(12, 2), nullable=True)  # custo real da etiqueta (negócio)
+    service_id = Column(Integer, nullable=True)
+    service_name = Column(String, nullable=True)
+    company_name = Column(String, nullable=True)
+    inserted_at = Column(String, nullable=True)
+    purchased_at = Column(String, nullable=True)
+    generated_at = Column(String, nullable=True)
+    posted_at = Column(String, nullable=True)
+    delivered_at = Column(String, nullable=True)
+    last_tracking_update_at = Column(String, nullable=True)
+    timeline = Column(JSONB, default=list)
+    raw = Column(JSONB, nullable=True)
+    last_error = Column(String, nullable=True)
+    created_at = Column(String, default=_now_iso)
+    updated_at = Column(String, nullable=True)
+
+
+class ShippingQuote(Base):
+    """Cotação com validade (expiração). Congela peso/dimensões/opções no servidor."""
+    __tablename__ = "shipping_quotes"
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(String, nullable=True, index=True)
+    destination_postal_code = Column(String, nullable=False)
+    items = Column(JSONB, default=list)     # [{product_id, quantity}]
+    volumes = Column(JSONB, default=list)   # payload de volumes enviado ao ME
+    results = Column(JSONB, default=list)   # opções normalizadas
+    created_at = Column(String, default=_now_iso)
+    expires_at = Column(String, nullable=False)
+
+
+class MelhorEnvioWebhookEvent(Base):
+    """Deduplicação/idempotência de webhooks."""
+    __tablename__ = "melhor_envio_webhook_events"
+    id = Column(String, primary_key=True)  # hash do corpo (idempotência)
+    event = Column(String, nullable=True)
+    order_ref = Column(String, nullable=True, index=True)
+    payload = Column(JSONB, nullable=True)
+    received_at = Column(String, default=_now_iso)

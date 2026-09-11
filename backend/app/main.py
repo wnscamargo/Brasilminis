@@ -15,8 +15,9 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.dependencies import get_db  # noqa: F401  (garante import do pacote)
 from app import models  # noqa: F401  (registra os modelos no metadata)
-from app.routers import account, admin, auth, banners, catalog, favorites, orders, reviews, site
+from app.routers import account, admin, auth, banners, catalog, favorites, melhor_envio, orders, reviews, site
 from app.seed import seed_admin, seed_data
+from app.services import melhor_envio_auth_service as auth_service
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -34,6 +35,7 @@ app.include_router(account.router)
 app.include_router(banners.router)
 app.include_router(site.router)
 app.include_router(admin.router)
+app.include_router(melhor_envio.router)
 
 # Uploads persistentes (identidade visual, imagens de produto) servidos sob /api/uploads.
 os.makedirs(os.path.join(settings.UPLOADS_DIR, "branding"), exist_ok=True)
@@ -70,10 +72,27 @@ def health(response: Response):
     healthy = database == "ok" and migration == "current"
     if not healthy:
         response.status_code = 503
+
+    # Melhor Envio é OPCIONAL: nunca transforma em 503.
+    me_state = "not_configured"
+    if settings.MELHOR_ENVIO_CONFIGURED:
+        try:
+            db = SessionLocal()
+            try:
+                st = auth_service.status(db).get("status")
+                me_state = "connected" if st == "connected" else (
+                    "unavailable" if st in ("error", "token_expired") else "not_configured"
+                )
+            finally:
+                db.close()
+        except Exception:
+            me_state = "unavailable"
+
     return {
         "status": "ok" if healthy else "degraded",
         "database": database,
         "migration": migration,
+        "melhor_envio": me_state,
     }
 
 

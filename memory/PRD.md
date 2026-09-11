@@ -182,3 +182,30 @@ Evolução estrutural (stack mantida: FastAPI + SQLAlchemy + PostgreSQL + Alembi
 
 ### Backlog remanescente (P1/P2)
 - Opcional: trocar `<input type=date>` do período personalizado por shadcn Calendar. Correios/Melhor Envio, Mercado Pago real, histórico de status de pedido (aguardando validação do usuário na VPS).
+
+---
+## Melhor Envio — FASE SANDBOX (não ativar produção) — Junho/2026
+Integração oficial (OAuth 2.0 + fluxo de envio) construída SOMENTE para Sandbox, com placeholders. Migration Alembic `d2e3f4a5b6c7` (não-destrutiva). Branch alvo: `melhor-envio-sandbox` (salvar via GitHub; NÃO tocar `python-vps`).
+
+### Backend
+- **Config** (`core/config.py`): vars `MELHOR_ENVIO_ENV|CLIENT_ID|CLIENT_SECRET|REDIRECT_URI|USER_AGENT_EMAIL|TOKEN_ENCRYPTION_KEY`, `FRONTEND_URL`; `MELHOR_ENVIO_BASE_URL` resolve sandbox/prod dinamicamente; `MELHOR_ENVIO_USER_AGENT` = "Brasil Minis (email)"; `MELHOR_ENVIO_CONFIGURED`.
+- **Cripto** (`core/crypto.py`): Fernet; tokens criptografados em repouso.
+- **Cliente HTTP** (`services/melhor_envio_client.py`): httpx com timeouts, User-Agent, refresh proativo (margem 60s) + 1 retry único em 401, 5xx/rede → `MelhorEnvioUnavailable` (não derruba a loja), logs sanitizados (sem token/PII/code). OAuth: `exchange_code`, `_refresh`, `api_request`.
+- **Serviços**: `auth_service` (auth-url + state CSRF persistido em `melhor_envio_tokens.pending_state`, status, test, disconnect, sender CRUD, exchange_code wrapper); `quote_service` (peso/dimensões/preço SEMPRE do PostgreSQL, valida dados logísticos, CEP; normaliza opções; cotação com validade de 15 min em `shipping_quotes`); `shipment_service` (prepare→cart→checkout→generate→print, idempotente por estado e por `cart_order_id`, ALLOWED_ACTIONS por estado); `tracking_service` (rastreio + timeline, mapeia status externo p/ interno sem perder o original; `apply_external_status` p/ webhook).
+- **Modelos/Tabelas novas**: `melhor_envio_tokens`, `melhor_envio_sender`, `melhor_envio_shipments` (1:1 pedido; lifecycle), `shipping_quotes`, `melhor_envio_webhook_events`. Produto +`weight_kg/width_cm/height_cm/length_cm/sku/barcode`. Pedido + snapshot de frete congelado (`shipping_provider/service_id/service_name/company_id/company_name/price_customer/price_quoted/delivery_min/max/destination_postal_code/quote_snapshot`) + `recipient_snapshot`.
+- **Pedido** (`order_service`): se cotação selecionada, congela snapshot; frete grátis preservado (cliente paga 0, mas custo real cotado é registrado); cria `MelhorEnvioShipment` (pending). Sem cotação → regra de frete padrão (compat).
+- **Rotas** (`routers/melhor_envio.py`): admin `GET /api/admin/melhor-envio/{status,auth-url}`, `POST .../{test,disconnect}`, `GET/PUT .../sender`; callback público `GET /api/admin/melhor-envio/callback` (valida state, redireciona ao front); `POST /api/shipping/quote` (cliente/visitante); ações admin por pedido `.../shipment/{prepare,cart,checkout,generate}` + `GET .../shipment[/print]` + `POST .../shipment/tracking`; webhook `POST /api/webhooks/melhor-envio` (HMAC-SHA256 hex/base64 + dedup por hash). `/api/health` inclui `melhor_envio` como OPCIONAL (nunca vira 503).
+
+### Frontend
+- Nova página `pages/admin/AdminMelhorEnvio.js` (badge SANDBOX, status, Conectar/Testar/Reconectar/Desconectar, form de remetente). Rota `/admin/melhor-envio` + item no menu.
+- `Checkout.js`: card "Frete" com "Calcular frete" (POST /shipping/quote), lista de opções (transportadora/serviço/prazo/preço), seleção, total; campos CPF/CNPJ e telefone do destinatário; envia `quote_id/shipping_service_id/recipient_document/recipient_phone`; erros amigáveis (indisponível/CEP) sem quebrar a loja.
+- `AdminOrders.js`: painel de logística por pedido (transportadora, valor cliente vs custo real, prazo, CEP, status interno/externo, tracking, shipment id) + ações por estado + timeline.
+- `AdminProducts.js`: seção "Dados logísticos" (peso/largura/altura/comprimento/SKU/barcode) + alerta "Dados de frete incompletos".
+
+### Testes
+- `tests/test_melhor_envio.py` (13 mockados via respx, sem internet): auth-url/state, exchange (token criptografado), refresh em token expirado, 401→1 retry, API fora→unavailable, cotação (normalização/CEP inválido/sem dimensões/API fora/expiração), idempotência de carrinho, fluxo completo cart→checkout→generate→print→tracking, print antes de generate bloqueado. **13/13 PASS**.
+- Regressão HTTP: `backend_test.py` + `test_new_features.py` **79+/80 PASS** (1 falha foi timeout de rede flaky; passou no rerun). Frontend (testing_agent) **100%**, sem bugs.
+- Segurança: cost_price e tokens/segredos NUNCA no frontend; RBAC admin nos endpoints; state CSRF; HMAC no webhook.
+
+### Deploy (pendente com o usuário)
+- Cadastrar app Sandbox e a redirect URI exata; preencher `MELHOR_ENVIO_*` no `.env`; rodar `alembic upgrade head`. Produção NÃO ativada. Salvar em branch `melhor-envio-sandbox`.
