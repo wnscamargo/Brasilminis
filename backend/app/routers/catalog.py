@@ -61,7 +61,36 @@ def list_products(
 ):
     q = db.query(Product).filter(Product.is_active.is_(True))
     if category:
-        q = q.filter(Product.category == category)
+        cat = db.query(Category).filter(
+            Category.slug == category,
+            Category.is_active == True
+        ).first()
+
+        if cat:
+            if cat.parent_id:
+                # Subcategoria: filtra diretamente pela subcategoria.
+                q = q.filter(Product.subcategory_id == cat.id)
+            else:
+                # Categoria principal: retorna todos os produtos vinculados
+                # diretamente à principal ou às suas subcategorias.
+                sub_ids = [
+                    r[0]
+                    for r in db.query(Category.id).filter(
+                        Category.parent_id == cat.id,
+                        Category.is_active == True
+                    ).all()
+                ]
+
+                if sub_ids:
+                    q = q.filter(
+                        (Product.main_category_id == cat.id)
+                        | (Product.subcategory_id.in_(sub_ids))
+                    )
+                else:
+                    q = q.filter(Product.main_category_id == cat.id)
+        else:
+            # Compatibilidade com produtos antigos que usam slug em Product.category.
+            q = q.filter(Product.category == category)
     if group:
         q = q.filter(Product.group == group)
     if brand:

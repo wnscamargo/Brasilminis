@@ -30,6 +30,20 @@ export default function Catalog() {
   const onSale = params.get("on_sale") || "";
   const sort = params.get("sort") || "recent";
 
+  const mainCategories = categories.filter((c) => !c.parent_id);
+
+  const childrenByParent = categories.reduce((acc, c) => {
+    if (c.parent_id) {
+      if (!acc[c.parent_id]) acc[c.parent_id] = [];
+      acc[c.parent_id].push(c);
+    }
+    return acc;
+  }, {});
+
+  const selectedCategory = categories.find((c) => c.slug === category);
+  const selectedMainId =
+    selectedCategory?.parent_id || selectedCategory?.id || null;
+
   useEffect(() => {
     api.get("/brands").then((r) => setBrands(r.data));
   }, []);
@@ -119,15 +133,39 @@ export default function Catalog() {
             </div>
 
             <FilterGroup title="Categorias">
-              <FilterItem active={!category} onClick={() => setParam("category", "")} label="Todas" />
-              {categories.map((c) => (
-                <FilterItem
-                  key={c.id}
-                  active={category === c.slug}
-                  onClick={() => setParam("category", c.slug)}
-                  label={c.name}
-                />
-              ))}
+              <FilterItem
+                active={!category}
+                onClick={() => setParam("category", "")}
+                label="Todas"
+              />
+
+              {mainCategories.map((main) => {
+                const children = childrenByParent[main.id] || [];
+                const mainActive = selectedMainId === main.id;
+
+                return (
+                  <div key={main.id} className="mb-1">
+                    <FilterItem
+                      active={category === main.slug}
+                      onClick={() => setParam("category", main.slug)}
+                      label={main.name}
+                    />
+
+                    {children.length > 0 && mainActive && (
+                      <div className="ml-3 mt-1 mb-2 pl-2 border-l border-[#FFC107]/40">
+                        {children.map((sub) => (
+                          <SubcategoryFilterItem
+                            key={sub.id}
+                            active={category === sub.slug}
+                            onClick={() => setParam("category", sub.slug)}
+                            label={sub.name}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </FilterGroup>
 
             <FilterGroup title="Marcas">
@@ -191,6 +229,22 @@ function FilterItem({ active, onClick, label }) {
       }`}
     >
       {label}
+    </button>
+  );
+}
+
+
+function SubcategoryFilterItem({ active, onClick, label }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`block w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors ${
+        active
+          ? "bg-[#FFC107]/15 text-[#FFC107] font-semibold"
+          : "text-gray-500 hover:text-white hover:bg-white/5"
+      }`}
+    >
+      ↳ {label}
     </button>
   );
 }
