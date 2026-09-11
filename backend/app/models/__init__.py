@@ -176,6 +176,16 @@ class Order(Base):
     total = Column(Numeric(12, 2))
     payment_method = Column(String)
     payment_status = Column(String)
+    # Snapshot do pagamento (Mercado Pago) — não sobrescrever histórico
+    payment_provider = Column(String, nullable=True)
+    payment_external_id = Column(String, nullable=True, index=True)  # Order id do MP
+    payment_mp_id = Column(String, nullable=True, index=True)        # payment id do MP
+    payment_status_detail = Column(String, nullable=True)
+    payment_status_raw = Column(String, nullable=True)               # status original do MP
+    payment_amount = Column(Numeric(12, 2), nullable=True)
+    payment_created_at = Column(String, nullable=True)
+    payment_approved_at = Column(String, nullable=True)
+    payment_idempotency_key = Column(String, nullable=True)
     status = Column(String, index=True)
     address = Column(JSONB, nullable=True)
     created_at = Column(String, default=_now_iso, index=True)
@@ -317,3 +327,40 @@ class MelhorEnvioWebhookEvent(Base):
     order_ref = Column(String, nullable=True, index=True)
     payload = Column(JSONB, nullable=True)
     received_at = Column(String, default=_now_iso)
+
+
+# ================= Mercado Pago (TESTE) =================
+class MpSettings(Base):
+    """Config do gateway (linha única, id=1). Access Token cifrado (Fernet infra)."""
+    __tablename__ = "mp_settings"
+    id = Column(Integer, primary_key=True, default=1)
+    environment = Column(String, default="test")  # test | production (bloqueado nesta fase)
+    public_key = Column(String, nullable=True)
+    access_token_enc = Column(Text, nullable=True)
+    webhook_secret_enc = Column(Text, nullable=True)
+    is_enabled = Column(Boolean, default=False)
+    status = Column(String, default="not_configured")
+    last_test_at = Column(String, nullable=True)
+    last_error = Column(String, nullable=True)
+    created_at = Column(String, default=_now_iso)
+    updated_at = Column(String, nullable=True)
+
+
+class MpWebhookEvent(Base):
+    """Idempotência/auditoria de webhooks do Mercado Pago."""
+    __tablename__ = "mp_webhook_events"
+    id = Column(String, primary_key=True)  # dedup (data.id + type + ts)
+    type = Column(String, nullable=True)
+    data_id = Column(String, nullable=True, index=True)
+    payload = Column(JSONB, nullable=True)
+    received_at = Column(String, default=_now_iso)
+
+
+class PaymentAuditLog(Base):
+    """Log de eventos de pagamento (sem segredos)."""
+    __tablename__ = "payment_audit_logs"
+    id = Column(String, primary_key=True, default=_uuid)
+    order_id = Column(String, nullable=True, index=True)
+    event = Column(String, nullable=False)  # PAYMENT_CREATED, PAYMENT_APPROVED, ...
+    detail = Column(String, nullable=True)
+    created_at = Column(String, default=_now_iso)

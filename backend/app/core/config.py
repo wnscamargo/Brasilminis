@@ -31,6 +31,10 @@ class Settings:
     MELHOR_ENVIO_TOKEN_ENCRYPTION_KEY: str = os.environ.get("MELHOR_ENVIO_TOKEN_ENCRYPTION_KEY", "")
     FRONTEND_URL: str = os.environ.get("FRONTEND_URL", "")
 
+    # ----- Mercado Pago (TESTE; produção preparada mas bloqueada) -----
+    MERCADO_PAGO_TOKEN_ENCRYPTION_KEY: str = os.environ.get("MERCADO_PAGO_TOKEN_ENCRYPTION_KEY", "")
+    MERCADO_PAGO_API_BASE: str = os.environ.get("MERCADO_PAGO_API_BASE", "https://api.mercadopago.com")
+
     @property
     def MELHOR_ENVIO_BASE_URL(self) -> str:
         return (

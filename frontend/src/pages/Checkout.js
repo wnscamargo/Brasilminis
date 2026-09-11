@@ -6,6 +6,7 @@ import api, { formatApiError } from "@/lib/api";
 import { formatBRL } from "@/lib/brand";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { useCepAutofill, maskCep } from "@/lib/cep";
 
 export default function Checkout() {
   const { items, subtotal, clearCart } = useCart();
@@ -29,6 +30,14 @@ export default function Checkout() {
   const [quoteId, setQuoteId] = useState(null);
   const [selectedShip, setSelectedShip] = useState(null);
   const [calculating, setCalculating] = useState(false);
+
+  const fillFromCep = useCepAutofill((d) => setAddress((a) => ({
+    ...a,
+    street: d.street || a.street,
+    district: d.district || a.district,
+    city: d.city || a.city,
+    state: d.uf || a.state,
+  })));
 
   if (!user) {
     return (
@@ -161,7 +170,7 @@ export default function Checkout() {
             <h3 className="font-display font-bold text-white uppercase mb-4">Endereço de entrega</h3>
             <div className="grid grid-cols-2 gap-3">
               <Input label="Destinatário" value={address.recipient} onChange={(v) => setAddress({ ...address, recipient: v })} full testid="addr-recipient" />
-              <Input label="CEP" value={address.zip} onChange={(v) => setAddress({ ...address, zip: v })} testid="addr-zip" />
+              <Input label="CEP" value={address.zip} onChange={(v) => { const mv = maskCep(v); setAddress((a) => ({ ...a, zip: mv })); fillFromCep(mv); }} testid="addr-zip" />
               <Input label="Estado" value={address.state} onChange={(v) => setAddress({ ...address, state: v })} testid="addr-state" />
               <Input label="Rua" value={address.street} onChange={(v) => setAddress({ ...address, street: v })} testid="addr-street" />
               <Input label="Número" value={address.number} onChange={(v) => setAddress({ ...address, number: v })} testid="addr-number" />

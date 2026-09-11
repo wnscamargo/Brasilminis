@@ -209,3 +209,27 @@ Integração oficial (OAuth 2.0 + fluxo de envio) construída SOMENTE para Sandb
 
 ### Deploy (pendente com o usuário)
 - Cadastrar app Sandbox e a redirect URI exata; preencher `MELHOR_ENVIO_*` no `.env`; rodar `alembic upgrade head`. Produção NÃO ativada. Salvar em branch `melhor-envio-sandbox`.
+
+---
+## Mercado Pago (TESTE) + CEP automático — Junho/2026
+Migration `e4f5a6b7c8d9` (não-destrutiva). Branch alvo: `mercado-pago-gateway`. Produção BLOQUEADA (backend recusa `environment=production`).
+
+### Backend (completo e testado)
+- **CEP** (`services/cep_service.py`, `GET /api/cep/{cep}`): BrasilAPI + fallback ViaCEP → {street, district, city, uf}; erros amigáveis.
+- **Mercado Pago** (`services/mercado_pago_service.py`, Orders API `/v1/orders`): settings CRUD (Access Token cifrado Fernet com `MERCADO_PAGO_TOKEN_ENCRYPTION_KEY` do .env — nunca no painel/logs/frontend; só máscara `••••••`), test_connection, disconnect; PIX (QR/qr_base64/copia-e-cola/expiração, valor SEMPRE do backend), Cartão (token do Brick + parcelas + método + emissor; sem PAN/CVV no backend), `X-Idempotency-Key` (clique duplo não duplica), status mapping preservando `status`/`status_detail` originais, snapshot no pedido (payment_provider/external_id/mp_id/status/status_detail/status_raw/amount/created_at/approved_at/idempotency_key), auditoria (`payment_audit_logs`), webhook `POST /api/webhooks/mercado-pago` (HMAC x-signature + dedup `mp_webhook_events`, confirma via GET da Order — nunca confia só no webhook).
+- `/api/health` inclui `mercado_pago` (opcional, nunca vira 503). Chave Fernet MP em `backend/.env`.
+- **Tabelas novas**: `mp_settings`, `mp_webhook_events`, `payment_audit_logs`. Pedido +9 colunas de pagamento.
+
+### Frontend
+- Admin → **Mercado Pago** (`AdminMercadoPago.js`): badge TEST, status, Public Key/Access Token (mascarado)/Webhook Secret, Salvar/Testar/Desconectar, aviso de criptografia. Rota + nav.
+- **CEP automático** (`lib/cep.js`): máscara 00000-000 + debounce 500ms; aplicado no Checkout (endereço do cliente) e no Remetente (Admin Melhor Envio) — preenche rua/bairro/cidade/UF, mantém número/complemento, silencioso se falhar.
+- Checkout: campos CPF/CNPJ e telefone do destinatário (para Melhor Envio) já presentes.
+
+### Testes
+- `tests/test_mercado_pago.py` (8 mockados via respx): cifra do token/não vaza, produção bloqueada, PIX usa valor do backend, PIX idempotente, cartão aprovado, webhook HMAC válido/inválido, webhook dedup + aprovação, status mapping. **8/8 PASS**. Regressão (melhor_envio 13 + TestOrders + TestCatalog) verde. Corrigido bug real: `save_settings` não persistia a linha nova.
+
+### PENDENTE (frontend checkout de pagamento)
+- Backend PIX/cartão prontos e testados, mas a UI de pagamento DENTRO do checkout (exibir QR PIX / Card Payment Brick) ainda NÃO foi integrada — o checkout atual segue com pagamento simulado. Próximo passo: renderizar QR/Brick após criar o pedido quando o MP estiver configurado.
+
+### Infra (variáveis)
+- `MERCADO_PAGO_TOKEN_ENCRYPTION_KEY` (Fernet, só backend/.env), `MERCADO_PAGO_API_BASE=https://api.mercadopago.com`. Credenciais (Public Key/Access Token/Webhook Secret) via painel Admin. Não fazer deploy; salvar em `mercado-pago-gateway`.

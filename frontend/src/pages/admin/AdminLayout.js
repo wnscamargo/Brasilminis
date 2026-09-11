@@ -1,5 +1,5 @@
 import { Link, useLocation, Outlet } from "react-router-dom";
-import { LayoutDashboard, Package, Tags, Award, ShoppingBag, Users, Image, Home, Construction, Palette, Truck } from "lucide-react";
+import { LayoutDashboard, Package, Tags, Award, ShoppingBag, Users, Image, Home, Construction, Palette, Truck, CreditCard } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 
 const NAV = [
@@ -9,6 +9,7 @@ const NAV = [
   { to: "/admin/marcas", l: "Marcas", icon: Award },
   { to: "/admin/pedidos", l: "Pedidos", icon: ShoppingBag },
   { to: "/admin/melhor-envio", l: "Melhor Envio", icon: Truck },
+  { to: "/admin/mercado-pago", l: "Mercado Pago", icon: CreditCard },
   { to: "/admin/clientes", l: "Clientes", icon: Users },
   { to: "/admin/banners", l: "Banners", icon: Image },
   { to: "/admin/identidade", l: "Identidade Visual", icon: Palette },
