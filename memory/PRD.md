@@ -255,3 +255,21 @@ Migration `e4f5a6b7c8d9` (não-destrutiva). Branch alvo: `mercado-pago-gateway`.
 
 ### Deploy
 - NÃO deployado. Usar "Save to Github" para a branch `integrations-production-ready`. Migration head: `f5a6b7c8d9e0`.
+
+---
+
+## Categorias públicas 100% controladas pelo Admin (Jun/2026) — branch `fix-public-category-tree`
+
+### Entregue
+- **Menu superior dinâmico** (`Header.js`): categorias principais vêm de `/api/categories?tree=true` (parent_id null, is_active, sort_order). Dropdown de subcategorias no hover (desktop) e acordeão touch (mobile). Institucionais fixos e separados: Início, Lançamentos, Promoções, Marcas, Contato. Criar/renomear/desativar/reordenar categoria no Admin reflete automaticamente no site.
+- **Contexto reutilizável** (`context/CategoriesContext.js`): fetch ÚNICO da árvore, compartilhado por Header/Catálogo/mobile. Helper `findCategoryTrail` (principal>sub).
+- **Backend `_category_filter`** (`catalog.py`): `?category=<principal>` → produtos com `main_category_id` dela OU `subcategory_id` das subcategorias (+ fallback legado `Product.category`/`group`); `?category=<sub>` → só `subcategory_id` dela. Validado: hotwheels→2, mainline→1, elite-64→0.
+- **Catálogo** (`Catalog.js`): sidebar em accordion SEM `max-h-64 overflow-y-auto`; principal clicável + seta expandir + subcategorias; auto-expande o pai da subcategoria ativa. Botão "Todas" limpa só `category` preservando marca/promoção/ordenação. Breadcrumb + título dinâmicos (PRINCIPAL > SUB). URL `/produtos?category=<slug>` persiste no refresh e por link direto.
+
+### Testes (iteration_8) — 100%, sem bugs
+- Backend 5/5 filtros + árvore ordenada/is_active. Frontend desktop (dropdown, breadcrumb, accordion, "Todas" preserva filtros, refresh) + mobile (acordeão) + regressão (cart/checkout/produto/admin). Corrigido testid duplicado `catalog-title`.
+- Dados de teste criados no preview: Hot Wheels (subs mainline/premium-hw/elite-64/fast-furious), Matchbox, Majorette; produtos TESTE (hotwheels/mainline) e HW DIRETO (hotwheels).
+
+### Não deployado
+- Trabalho no preview; salvar via "Save to Github" na branch `fix-public-category-tree`.
+

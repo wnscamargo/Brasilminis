@@ -14,6 +14,25 @@ router = APIRouter(prefix="/api", tags=["catalog"])
 PUBLIC_EXCLUDE = ("cost_price",)  # custo NUNCA é exposto publicamente
 
 
+def _category_filter(db: Session, slug: str):
+    """Filtro de produtos por slug de categoria.
+
+    - Categoria principal: produtos com main_category_id dela OU subcategory_id de suas subcategorias.
+    - Subcategoria: produtos com subcategory_id dela.
+    - Compatibilidade com o campo legado Product.category / Product.group.
+    """
+    cat = db.query(Category).filter(Category.slug == slug).first()
+    if not cat:
+        return or_(Product.category == slug, Product.group == slug)
+    if cat.parent_id is None:
+        child_ids = [r[0] for r in db.query(Category.id).filter(Category.parent_id == cat.id).all()]
+        conds = [Product.main_category_id == cat.id, Product.group == cat.slug, Product.category == cat.slug]
+        if child_ids:
+            conds.append(Product.subcategory_id.in_(child_ids))
+        return or_(*conds)
+    return or_(Product.subcategory_id == cat.id, Product.category == cat.slug)
+
+
 @router.get("/categories")
 def list_categories(group: Optional[str] = None, tree: bool = False, db: Session = Depends(get_db)):
     if tree:
@@ -61,7 +80,7 @@ def list_products(
 ):
     q = db.query(Product).filter(Product.is_active.is_(True))
     if category:
-        q = q.filter(Product.category == category)
+        q = q.filter(_category_filter(db, category))
     if group:
         q = q.filter(Product.group == group)
     if brand:

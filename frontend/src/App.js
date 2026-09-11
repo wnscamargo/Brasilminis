@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 
 import { AuthProvider } from "@/context/AuthContext";
 import { SiteConfigProvider } from "@/context/SiteConfigContext";
+import { CategoriesProvider } from "@/context/CategoriesContext";
 import { CartProvider } from "@/context/CartContext";
 import { FavoritesProvider } from "@/context/FavoritesContext";
 import { ProtectedRoute, ScrollToTop } from "@/components/Guards";
@@ -46,6 +47,7 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <SiteConfigProvider>
+          <CategoriesProvider>
           <CartProvider>
             <FavoritesProvider>
               <ScrollToTop />
@@ -91,6 +93,7 @@ function App() {
               </MaintenanceGate>
             </FavoritesProvider>
           </CartProvider>
+          </CategoriesProvider>
           </SiteConfigProvider>
         </AuthProvider>
       </BrowserRouter>
