@@ -11,7 +11,7 @@ from app.services import melhor_envio_client as client
 from app.services.melhor_envio_client import MelhorEnvioUnavailable
 from app.utils import to_dict
 
-SCOPES = "shipping-calculate cart-write cart-read shipping-checkout shipping-generate shipping-print shipping-tracking shipping-cancel"
+SCOPES = "shipping-calculate cart-write cart-read shipping-checkout shipping-generate shipping-print"
 
 
 def _now_iso() -> str:
