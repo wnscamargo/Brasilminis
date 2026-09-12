@@ -21,7 +21,7 @@ def _money(value) -> Decimal:
     return Decimal(str(value)).quantize(CENTS, rounding=ROUND_HALF_UP)
 
 
-def _resolve_shipping(db: Session, payload: CheckoutInput, amount_after_discount: Decimal, order_items: list):
+def _resolve_shipping(db: Session, payload: CheckoutInput, amount_after_discount: Decimal, order_items: list, coupon_free_shipping: bool = False):
     """Resolve o frete. Se houver cotação Melhor Envio selecionada, congela o snapshot.
 
     Retorna (customer_price, quoted_price, snapshot, meta). Preserva frete grátis:
@@ -35,7 +35,7 @@ def _resolve_shipping(db: Session, payload: CheckoutInput, amount_after_discount
         if not option:
             raise HTTPException(status_code=400, detail="Serviço de frete inválido para esta cotação.")
         quoted = _money(option["price"])
-        free = amount_after_discount >= Decimal(str(settings.FREE_SHIPPING_THRESHOLD))
+        free = coupon_free_shipping or (amount_after_discount >= Decimal(str(settings.FREE_SHIPPING_THRESHOLD)))
         customer = Decimal("0.00") if free else quoted
         sender = db.get(MelhorEnvioSender, 1)
         origin = "".join(c for c in (sender.postal_code if sender else "") if c.isdigit())
@@ -63,6 +63,8 @@ def _resolve_shipping(db: Session, payload: CheckoutInput, amount_after_discount
         return customer, quoted, snapshot, meta
 
     # Fallback: regra de frete simples existente
+    if coupon_free_shipping:
+        return Decimal("0.00"), None, None, {"provider": "standard", "free_shipping_coupon": True}
     customer = _money(compute_shipping(float(amount_after_discount), payload.shipping_method))
     return customer, None, None, {"provider": "standard"}
 
@@ -143,11 +145,13 @@ def create_order(db: Session, user: dict, payload: CheckoutInput) -> dict:
             })
 
         subtotal = _money(subtotal)
-        discount_f, coupon_code = resolve_coupon(db, payload.coupon, float(subtotal))
+        discount_f, coupon_free_ship, coupon_snapshot_obj, coupon_code = resolve_coupon(
+            db, payload.coupon, user, order_items, float(subtotal)
+        )
         discount = _money(discount_f)
         amount_after_discount = subtotal - discount
         shipping, shipping_quoted, quote_snapshot, ship_meta = _resolve_shipping(
-            db, payload, amount_after_discount, order_items
+            db, payload, amount_after_discount, order_items, coupon_free_shipping=coupon_free_ship
         )
         total = _money(amount_after_discount + shipping)
         recipient_snapshot = _build_recipient(payload, user)
@@ -186,6 +190,7 @@ def create_order(db: Session, user: dict, payload: CheckoutInput) -> dict:
             shipping_destination_postal_code=ship_meta.get("destination_postal_code"),
             shipping_quote_snapshot=quote_snapshot,
             recipient_snapshot=recipient_snapshot,
+            coupon_snapshot=coupon_snapshot_obj,
             total=total,
             payment_method=payload.payment_method,
             payment_status=initial_payment_status,
@@ -200,6 +205,11 @@ def create_order(db: Session, user: dict, payload: CheckoutInput) -> dict:
             db.query(Product).filter(Product.id == item.product_id).update(
                 {Product.stock: Product.stock - item.quantity}, synchronize_session=False
             )
+
+        # Registra o uso do cupom (contador + redemption) de forma atômica com o pedido
+        if coupon_code:
+            from app.services.coupon_service import record_redemption
+            record_redemption(db, coupon_code, user["id"], order.id)
 
         # Cria o registro de envio (Melhor Envio) quando houve cotação selecionada
         if ship_meta.get("provider") == "melhor_envio":

@@ -40,6 +40,7 @@ import AdminMelhorEnvio from "@/pages/admin/AdminMelhorEnvio";
 import AdminMercadoPago from "@/pages/admin/AdminMercadoPago";
 import AdminIntegracoes from "@/pages/admin/AdminIntegracoes";
 import AdminContent from "@/pages/admin/AdminContent";
+import AdminCoupons from "@/pages/admin/AdminCoupons";
 
 const Shell = ({ children }) => <Layout>{children}</Layout>;
 
@@ -86,6 +87,7 @@ function App() {
                   <Route path="categorias" element={<AdminCategories />} />
                   <Route path="marcas" element={<AdminBrands />} />
                   <Route path="pedidos" element={<AdminOrders />} />
+                  <Route path="cupons" element={<AdminCoupons />} />
                   <Route path="clientes" element={<AdminCustomers />} />
                   <Route path="banners" element={<AdminBanners />} />
                   <Route path="site" element={<AdminSite />} />

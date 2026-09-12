@@ -203,6 +203,41 @@ class CouponValidateInput(BaseModel):
     code: str
 
 
+class CouponPreviewInput(BaseModel):
+    code: str
+    items: List[OrderItemInput]
+
+
+class CouponInput(BaseModel):
+    code: str
+    type: str = "percent"  # percent | fixed
+    value: float
+    min_order: float = 0
+    max_discount: Optional[float] = None
+    active: bool = True
+    description: Optional[str] = ""
+    starts_at: Optional[str] = None
+    expires_at: Optional[str] = None
+    usage_limit: Optional[int] = None
+    per_user_limit: Optional[int] = None
+    first_purchase_only: bool = False
+    free_shipping: bool = False
+    allow_stacking: bool = False
+    scope_type: str = "all"  # all | categories | products
+    scope_category_ids: List[str] = []
+    scope_product_ids: List[str] = []
+
+
+class CouponGenerateInput(BaseModel):
+    prefix: Optional[str] = "BM"
+    length: int = 8
+
+
+class OrderDeleteInput(BaseModel):
+    reason: str
+    confirm: str  # deve ser exatamente "EXCLUIR"
+
+
 class OrderStatusInput(BaseModel):
     status: str
 

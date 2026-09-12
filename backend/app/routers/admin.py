@@ -20,12 +20,17 @@ from app.schemas import (
     BrandInput,
     CategoryInput,
     CategoryReorderInput,
+    CouponGenerateInput,
+    CouponInput,
     ImageReorderInput,
+    OrderDeleteInput,
     OrderStatusInput,
     ProductImageUrlInput,
     ProductInput,
 )
 from app.services import analytics_service, category_service
+from app.services import coupon_service
+from app.services import order_admin_service
 from app.services import product_image_service as img_service
 from app.utils import slugify, to_dict
 
@@ -283,8 +288,8 @@ def delete_brand(brand_id: str, admin: dict = Depends(get_current_admin), db: Se
 
 # ---------------- Orders ----------------
 @router.get("/orders")
-def admin_list_orders(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
-    return [to_dict(o) for o in db.query(Order).order_by(Order.created_at.desc()).all()]
+def admin_list_orders(scope: str = "active", admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return order_admin_service.list_orders(db, scope)
 
 
 @router.put("/orders/{order_id}/status")
@@ -296,6 +301,37 @@ def update_order_status(order_id: str, payload: OrderStatusInput, admin: dict = 
     db.commit()
     db.refresh(order)
     return to_dict(order)
+
+
+@router.delete("/orders/{order_id}")
+def delete_order(order_id: str, payload: OrderDeleteInput, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return order_admin_service.delete_order(db, order_id, admin, payload.reason, payload.confirm)
+
+
+# ---------------- Cupons de desconto ----------------
+@router.get("/coupons")
+def admin_list_coupons(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return coupon_service.list_coupons(db)
+
+
+@router.post("/coupons/generate-code")
+def admin_generate_coupon_code(payload: CouponGenerateInput, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return {"code": coupon_service.generate_code(db, payload.prefix, payload.length)}
+
+
+@router.post("/coupons")
+def admin_create_coupon(payload: CouponInput, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return coupon_service.create_coupon(db, payload.model_dump())
+
+
+@router.put("/coupons/{code}")
+def admin_update_coupon(code: str, payload: CouponInput, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return coupon_service.update_coupon(db, code, payload.model_dump())
+
+
+@router.delete("/coupons/{code}")
+def admin_delete_coupon(code: str, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return coupon_service.delete_coupon(db, code)
 
 
 # ---------------- Customers ----------------

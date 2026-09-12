@@ -22,8 +22,13 @@ export default function Checkout() {
   const [couponCode, setCouponCode] = useState("");
   const [coupon, setCoupon] = useState(null);
   const [discount, setDiscount] = useState(0);
+  const [couponFreeShip, setCouponFreeShip] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [done, setDone] = useState(null);
+  // Endereço cadastrado / alternativo
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [useOther, setUseOther] = useState(false);
+  const [saveToAccount, setSaveToAccount] = useState(false);
   // Mercado Pago (pagamento real)
   const [mp, setMp] = useState({ loaded: false, enabled: false, publicKey: null });
   const [payStep, setPayStep] = useState(null); // pedido aguardando pagamento real
@@ -40,6 +45,25 @@ export default function Checkout() {
       .then(({ data }) => setMp({ loaded: true, enabled: !!data.enabled, publicKey: data.public_key }))
       .catch(() => setMp({ loaded: true, enabled: false, publicKey: null }));
   }, []);
+
+  // Carrega o endereço já cadastrado do cliente (default > mais recente).
+  useEffect(() => {
+    api.get("/account/addresses").then(({ data }) => {
+      const list = data || [];
+      setSavedAddresses(list);
+      if (list.length > 0) {
+        const chosen = list.find((a) => a.is_default) || list[list.length - 1];
+        setAddress({
+          label: chosen.label || "Casa", recipient: chosen.recipient || user?.name || "",
+          street: chosen.street || "", number: chosen.number || "", complement: chosen.complement || "",
+          district: chosen.district || "", city: chosen.city || "", state: chosen.state || "", zip: chosen.zip || "",
+        });
+        setUseOther(false);
+      } else {
+        setUseOther(true);
+      }
+    }).catch(() => setUseOther(true));
+  }, [user]);
 
   useEffect(() => {
     if (mp.enabled && payment === "boleto") setPayment("pix");
@@ -72,7 +96,7 @@ export default function Checkout() {
     );
   }
 
-  const freeShipping = subtotal - discount >= 300 || subtotal === 0;
+  const freeShipping = couponFreeShip || subtotal - discount >= 300 || subtotal === 0;
   const shipping = selectedShip ? (freeShipping ? 0 : selectedShip.price) : (freeShipping ? 0 : 29.9);
   const total = subtotal - discount + shipping;
 
@@ -99,15 +123,23 @@ export default function Checkout() {
   const applyCoupon = async () => {
     if (!couponCode) return;
     try {
-      const { data } = await api.post("/coupons/validate", { code: couponCode });
+      const { data } = await api.post("/coupons/preview", {
+        code: couponCode,
+        items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
+      });
       setCoupon(data);
-      const disc = data.type === "percent" ? subtotal * data.value / 100 : data.value;
-      setDiscount(Math.min(disc, subtotal));
+      setDiscount(data.discount || 0);
+      setCouponFreeShip(!!data.free_shipping);
       toast.success(`Cupom ${data.code} aplicado!`);
     } catch (e) {
-      setCoupon(null); setDiscount(0);
+      setCoupon(null); setDiscount(0); setCouponFreeShip(false);
       toast.error(formatApiError(e.response?.data?.detail));
     }
+  };
+
+  const removeCoupon = () => {
+    setCoupon(null); setDiscount(0); setCouponFreeShip(false); setCouponCode("");
+    toast.message("Cupom removido");
   };
 
   const placeOrder = async () => {
@@ -128,6 +160,11 @@ export default function Checkout() {
         recipient_phone: recipientPhone || null,
       });
       clearCart();
+      if (useOther && saveToAccount) {
+        try {
+          await api.post("/account/addresses", { ...address, is_default: savedAddresses.length === 0 });
+        } catch { /* não bloqueia o pedido */ }
+      }
       if (data.payment?.requires_payment) {
         setPayStep(data);
       } else {
@@ -224,15 +261,42 @@ export default function Checkout() {
           {/* address */}
           <div className="bm-card p-6">
             <h3 className="font-display font-bold text-white uppercase mb-4">Endereço de entrega</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <Input label="Destinatário" value={address.recipient} onChange={(v) => setAddress({ ...address, recipient: v })} full testid="addr-recipient" />
-              <Input label="CEP" value={address.zip} onChange={(v) => { const mv = maskCep(v); setAddress((a) => ({ ...a, zip: mv })); fillFromCep(mv); }} testid="addr-zip" />
-              <Input label="Estado" value={address.state} onChange={(v) => setAddress({ ...address, state: v })} testid="addr-state" />
-              <Input label="Rua" value={address.street} onChange={(v) => setAddress({ ...address, street: v })} testid="addr-street" />
-              <Input label="Número" value={address.number} onChange={(v) => setAddress({ ...address, number: v })} testid="addr-number" />
-              <Input label="Bairro" value={address.district} onChange={(v) => setAddress({ ...address, district: v })} testid="addr-district" />
-              <Input label="Cidade" value={address.city} onChange={(v) => setAddress({ ...address, city: v })} testid="addr-city" />
-              <Input label="Complemento" value={address.complement} onChange={(v) => setAddress({ ...address, complement: v })} full testid="addr-complement" />
+
+            {savedAddresses.length > 0 && !useOther && (
+              <div data-testid="saved-address" className="border border-[#2e2e2e] rounded-xl p-4 mb-4">
+                <p className="text-white text-sm font-semibold">{address.recipient}</p>
+                <p className="text-gray-400 text-sm">{address.street}, {address.number}{address.complement ? ` - ${address.complement}` : ""}</p>
+                <p className="text-gray-400 text-sm">{address.district} · {address.city}/{address.state} · CEP {address.zip}</p>
+              </div>
+            )}
+
+            {savedAddresses.length > 0 && (
+              <label className="flex items-center gap-2 text-sm text-gray-300 mb-4 cursor-pointer">
+                <input type="checkbox" checked={useOther} onChange={(e) => setUseOther(e.target.checked)} data-testid="use-other-address" className="accent-[#FFC107] h-4 w-4" />
+                Entregar em outro endereço
+              </label>
+            )}
+
+            {useOther && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label="Destinatário" value={address.recipient} onChange={(v) => setAddress({ ...address, recipient: v })} full testid="addr-recipient" />
+                  <Input label="CEP" value={address.zip} onChange={(v) => { const mv = maskCep(v); setAddress((a) => ({ ...a, zip: mv })); fillFromCep(mv); }} testid="addr-zip" />
+                  <Input label="Estado" value={address.state} onChange={(v) => setAddress({ ...address, state: v })} testid="addr-state" />
+                  <Input label="Rua" value={address.street} onChange={(v) => setAddress({ ...address, street: v })} testid="addr-street" />
+                  <Input label="Número" value={address.number} onChange={(v) => setAddress({ ...address, number: v })} testid="addr-number" />
+                  <Input label="Bairro" value={address.district} onChange={(v) => setAddress({ ...address, district: v })} testid="addr-district" />
+                  <Input label="Cidade" value={address.city} onChange={(v) => setAddress({ ...address, city: v })} testid="addr-city" />
+                  <Input label="Complemento" value={address.complement} onChange={(v) => setAddress({ ...address, complement: v })} full testid="addr-complement" />
+                </div>
+                <label className="flex items-center gap-2 text-sm text-gray-300 mt-3 cursor-pointer">
+                  <input type="checkbox" checked={saveToAccount} onChange={(e) => setSaveToAccount(e.target.checked)} data-testid="save-address-toggle" className="accent-[#FFC107] h-4 w-4" />
+                  Salvar este endereço na minha conta
+                </label>
+              </>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 mt-3">
               <Input label="CPF/CNPJ do destinatário" value={recipientDoc} onChange={setRecipientDoc} testid="addr-document" />
               <Input label="Telefone" value={recipientPhone} onChange={setRecipientPhone} testid="addr-phone" />
             </div>
@@ -300,18 +364,24 @@ export default function Checkout() {
             ))}
           </div>
 
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2 mb-2">
             <input
               value={couponCode}
               onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-              placeholder="Cupom"
+              placeholder="Cupom de desconto"
+              disabled={!!coupon}
               data-testid="coupon-input"
-              className="flex-1 bg-[#111111] border border-[#2e2e2e] rounded-full px-4 py-2 text-sm text-white focus:outline-none focus:border-[#FFC107]"
+              className="flex-1 bg-[#111111] border border-[#2e2e2e] rounded-full px-4 py-2 text-sm text-white focus:outline-none focus:border-[#FFC107] disabled:opacity-60"
             />
-            <button onClick={applyCoupon} data-testid="apply-coupon" className="bg-[#1E3A8A] text-white rounded-full px-4 py-2 text-sm font-semibold flex items-center gap-1">
-              <Tag size={14} /> Aplicar
-            </button>
+            {coupon ? (
+              <button onClick={removeCoupon} data-testid="remove-coupon" className="bg-red-500/20 text-red-400 rounded-full px-4 py-2 text-sm font-semibold">Remover</button>
+            ) : (
+              <button onClick={applyCoupon} data-testid="apply-coupon" className="bg-[#1E3A8A] text-white rounded-full px-4 py-2 text-sm font-semibold flex items-center gap-1">
+                <Tag size={14} /> Aplicar
+              </button>
+            )}
           </div>
+          {coupon && <p className="text-xs text-[#009B3A] mb-4" data-testid="coupon-applied">Cupom {coupon.code} aplicado{couponFreeShip ? " · frete grátis" : ""}.</p>}
 
           <div className="space-y-2 text-sm">
             <div className="flex justify-between text-gray-400"><span>Subtotal</span><span className="text-white">{formatBRL(subtotal)}</span></div>

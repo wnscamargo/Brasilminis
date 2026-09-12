@@ -292,3 +292,21 @@ Migration `e4f5a6b7c8d9` (não-destrutiva). Branch alvo: `mercado-pago-gateway`.
 ### Não deployado
 - Preview apenas; salvar via "Save to Github" na branch `site-content-and-customer-address`. Migration head: `a1b2c3d4e5f6`. Nova dep backend: `bleach`; frontend: `react-markdown`.
 
+
+---
+
+## Checkout endereço + Cupons de desconto + Exclusão protegida + Brasil Minis® (Jun/2026) — branch `checkout-order-admin-improvements`
+
+### Entregue
+- **Checkout endereço**: carrega endereço cadastrado (default > mais recente) via `/account/addresses`; toggle "Entregar em outro endereço" com form editável + CEP autofill; checkbox "Salvar este endereço na minha conta" (só persiste se marcado — nunca sobrescreve o cadastro). Snapshot final congelado em `order.recipient_snapshot` (Melhor Envio usa o endereço final). 
+- **Cupons de desconto** (`Coupon` estendido + `CouponRedemption`): % ou fixo, valor mínimo, desconto máximo, início/expiração, limite total e por cliente, ativo/inativo, primeira compra, frete grátis, escopo all/categorias/produtos, flag cumulativo. Admin CRUD em `/admin/cupons` (código manual ou gerado). Checkout aplica via `POST /api/coupons/preview` (cálculo 100% no servidor), mostra/remove, recalcula total. Pedido congela `coupon_snapshot` e registra uso (`used_count`+redemption) atômico.
+- **Exclusão protegida de pedidos**: soft delete (`deleted_at/deleted_by/delete_reason/stock_returned`); `DELETE /api/admin/orders/{id}` exige `reason` + `confirm=="EXCLUIR"`; bloqueia (409) se MP `approved` ou envio ME comprometido (in_cart/purchased/generated/posted/delivered); devolve estoque exatamente 1x (idempotente); auditoria `AdminAuditLog` (REQUESTED/BLOCKED/DELETED). Admin: filtro Ativos/Excluídos/Todos + modal de confirmação. Cliente não vê pedidos excluídos.
+- **Brasil Minis®**: ® discreto (sup) no Header (logo), Footer (marca + copyright) e títulos; logo original preservada.
+- **Migration** `b2c3d4e5f6a7` (não-destrutiva). Seed FRETEGRATIS corrigido para `free_shipping=True`.
+
+### Testes (iteration_10): backend 20/21 (1 skipped) + frontend 100%
+- `tests/test_coupons_and_delete.py`: preview auth/cálculo, snapshot+used_count, limites (inativo/expirado/usage/per-user/1ª compra), escopo, frete grátis, CRUD RBAC, exclusão (confirm/reason/soft/estoque 1x/idempotência/scope/MP-block 409/RBAC 403). Frontend: endereço, cupom aplicar/remover, modal exclusão gating, ® Header/Footer. Corrigidos: seed FRETEGRATIS + warning React key (AdminOrders).
+- Preservados (regressão OK): páginas institucionais, redes sociais, catálogo/categorias, MP, Melhor Envio, Admin.
+
+### Não deployado — branch `checkout-order-admin-improvements`. Head: `b2c3d4e5f6a7`.
+

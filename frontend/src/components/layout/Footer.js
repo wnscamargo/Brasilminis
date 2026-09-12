@@ -53,7 +53,10 @@ export default function Footer() {
 
       <div className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-12 grid grid-cols-2 md:grid-cols-4 gap-8">
         <div className="col-span-2 md:col-span-1">
-          <BrandLogo variant="footer" className="mb-4" />
+          <div className="mb-4 inline-flex items-start" data-testid="footer-brand">
+            <BrandLogo variant="footer" />
+            <sup className="text-gray-400 text-[10px] ml-0.5 mt-0.5">®</sup>
+          </div>
           <p className="text-sm text-gray-500 leading-relaxed">
             Sua paixão em miniatura. As melhores marcas e edições exclusivas do universo automotivo.
           </p>
@@ -71,7 +74,7 @@ export default function Footer() {
 
       <div className="border-t border-[#2e2e2e] py-5">
         <p className="text-center text-xs text-gray-600">
-          © {new Date().getFullYear()} Brasil Minis. Todos os direitos reservados.
+          © {new Date().getFullYear()} Brasil Minis<sup className="text-[8px]">®</sup>. Todos os direitos reservados.
         </p>
       </div>
     </footer>
