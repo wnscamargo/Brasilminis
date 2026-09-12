@@ -8,6 +8,7 @@ class RegisterInput(BaseModel):
     name: str
     email: EmailStr
     password: str = Field(min_length=6)
+    cpf: str
     newsletter: bool = False
 
 
@@ -29,6 +30,7 @@ class ResetPasswordInput(BaseModel):
 class ProfileInput(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
+    cpf: Optional[str] = None
     newsletter: Optional[bool] = None
 
 

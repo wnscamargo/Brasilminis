@@ -6,6 +6,7 @@ import api, { formatApiError } from "@/lib/api";
 import { formatBRL } from "@/lib/brand";
 import { useAuth } from "@/context/AuthContext";
 import { useCepAutofill, maskCep } from "@/lib/cep";
+import { maskCpf, normalizeCpf } from "@/lib/cpf";
 
 const TABS = [
   { k: "orders", l: "Pedidos", icon: Package },
@@ -190,11 +191,11 @@ function Addresses({ addresses, setAddresses }) {
 }
 
 function ProfileTab({ user, refreshUser }) {
-  const [form, setForm] = useState({ name: user.name, phone: user.phone || "", newsletter: user.newsletter });
+  const [form, setForm] = useState({ name: user.name, phone: user.phone || "", cpf: user.cpf ? maskCpf(user.cpf) : "", newsletter: user.newsletter });
   const save = async (e) => {
     e.preventDefault();
     try {
-      await api.put("/account/profile", form);
+      await api.put("/account/profile", { ...form, cpf: normalizeCpf(form.cpf) });
       await refreshUser();
       toast.success("Dados atualizados");
     } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
@@ -205,6 +206,8 @@ function ProfileTab({ user, refreshUser }) {
         <input value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})} data-testid="profile-name" className="w-full bg-[#111111] border border-[#2e2e2e] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#1E3A8A]" /></div>
       <div><label className="text-xs text-gray-500 block mb-1">E-mail</label>
         <input value={user.email} disabled className="w-full bg-[#0a0a0a] border border-[#2e2e2e] rounded-lg px-3 py-2.5 text-sm text-gray-500" /></div>
+      <div><label className="text-xs text-gray-500 block mb-1">CPF{!user.cpf && <span className="text-[#FFC107]"> · complete seu cadastro</span>}</label>
+        <input value={form.cpf} onChange={(e)=>setForm({...form,cpf:maskCpf(e.target.value)})} data-testid="profile-cpf" placeholder="000.000.000-00" className="w-full bg-[#111111] border border-[#2e2e2e] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#1E3A8A]" /></div>
       <div><label className="text-xs text-gray-500 block mb-1">Telefone</label>
         <input value={form.phone} onChange={(e)=>setForm({...form,phone:e.target.value})} data-testid="profile-phone" className="w-full bg-[#111111] border border-[#2e2e2e] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#1E3A8A]" /></div>
       <label className="flex items-center gap-2 text-sm text-gray-400">

@@ -1,0 +1,30 @@
+{
+  "summary": "Comprehensive testing of CPF feature (Brasil Minis) — backend (register/profile/admin/legacy/PII) and frontend (register mask+validation, /conta profile prefill, /admin/clientes column+edit modal). All 16 backend tests pass. Frontend UI flows for register, profile, admin edit all confirmed working. Checkout prefill verified via code review (user.cpf → maskCpf → recipientDoc state; address changes never touch user.cpf).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_cpf.py",
+    "/app/test_reports/pytest/cpf_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend CPF validation is mathematically correct (dígitos verificadores + rejects all-equal). normalize_cpf strips non-digits. Duplicate check runs on normalized value so masked variant '390.533.447-05' correctly conflicts with '39053344705'.",
+    "PII: Error messages never include the CPF number (verified via test assertions).",
+    "Register endpoint requires CPF (422 when absent, since RegisterInput.cpf is required). Profile update allows CPF (optional) — supports legacy 'complete later' flow.",
+    "Admin PUT /api/admin/customers/{id} correctly re-uses is_valid_cpf + uniqueness (excludes self via User.id != u.id).",
+    "Legacy admin user has cpf=NULL and /api/auth/me + all account endpoints continue to work.",
+    "Frontend maskCpf applies mask progressively (000.000.000-00) and normalizeCpf strips before sending. Profile tab shows dica '· complete seu cadastro' only when user.cpf is empty.",
+    "Checkout: useState(user?.cpf ? maskCpf(user.cpf) : '') + useEffect resync from user.cpf. recipient_document sent on order is derived from local state, not stored back into user.cpf, so switching address does NOT overwrite the registered CPF.",
+    "Minor note (not a bug): test_coupons_and_delete.py and test_new_features.py error at collection because BASE_URL env var isn't set when running pytest without it exported; existing tests rely on os.environ having REACT_APP_BACKEND_URL. Not related to CPF work."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_cpf.py (new — 16 tests covering register/profile/admin/legacy/PII)"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100% of tested flows (register, profile, admin)"},
+  "test_credentials": "admin@brasilminis.com / Admin@2025 (legacy, no CPF). Test customers: dynamically generated with unique CPFs (algorithm).",
+  "seed_data_creation": "Created ~10 TEST_* customers during backend tests + a few during frontend UI runs (all with valid unique CPFs, prefixed TEST_ for identification). No cleanup performed — safe for reuse.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "CPF backend tests live at /app/backend/tests/test_cpf.py and are self-contained (generate unique CPFs per run). Run with: pytest /app/backend/tests/test_cpf.py -v. Frontend testids present: register-cpf, profile-cpf, customer-cpf-*, edit-customer-*, edit-customer-modal, edit-customer-cpf, addr-document. Checkout prefill was validated by code review only (product cards didn't load quickly in preview during UI test); code path is straightforward and correct.",
+  "rca of the issue": "No issues found. Feature fully working as specified: CPF is required at register (422 when missing), validated mathematically (400 for check-digit failures like 11111111111 and 12345678900), stored normalized (11 digits), duplicate-checked across masked variants, error messages do not leak the CPF (PII-safe), admin legacy without CPF unaffected, profile allows legacy users to add CPF later, admin can view/edit CPF, checkout prefills from user.cpf and address edits don't mutate it."
+}

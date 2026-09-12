@@ -7,6 +7,7 @@ import { formatBRL } from "@/lib/brand";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { useCepAutofill, maskCep } from "@/lib/cep";
+import { maskCpf } from "@/lib/cpf";
 import MercadoPagoPayment from "@/components/checkout/MercadoPagoPayment";
 
 export default function Checkout() {
@@ -33,7 +34,7 @@ export default function Checkout() {
   const [mp, setMp] = useState({ loaded: false, enabled: false, publicKey: null });
   const [payStep, setPayStep] = useState(null); // pedido aguardando pagamento real
   // Melhor Envio
-  const [recipientDoc, setRecipientDoc] = useState("");
+  const [recipientDoc, setRecipientDoc] = useState(user?.cpf ? maskCpf(user.cpf) : "");
   const [recipientPhone, setRecipientPhone] = useState(user?.phone || "");
   const [shipOptions, setShipOptions] = useState(null);
   const [quoteId, setQuoteId] = useState(null);
@@ -45,6 +46,12 @@ export default function Checkout() {
       .then(({ data }) => setMp({ loaded: true, enabled: !!data.enabled, publicKey: data.public_key }))
       .catch(() => setMp({ loaded: true, enabled: false, publicKey: null }));
   }, []);
+
+  // Usa o CPF já cadastrado do cliente (evita pedir de novo); a edição de endereço NÃO altera o CPF do cadastro.
+  useEffect(() => {
+    if (user?.cpf) setRecipientDoc(maskCpf(user.cpf));
+    if (user?.phone) setRecipientPhone(user.phone);
+  }, [user]);
 
   // Carrega o endereço já cadastrado do cliente (default > mais recente).
   useEffect(() => {

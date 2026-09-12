@@ -32,6 +32,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     role = Column(String, nullable=False, default="customer")
     phone = Column(String, default="")
+    cpf = Column(String, unique=True, nullable=True, index=True)  # normalizado (11 dígitos); legado pode ser NULL
     newsletter = Column(Boolean, default=False)
     addresses = Column(JSONB, default=list)
     created_at = Column(String, default=_now_iso)

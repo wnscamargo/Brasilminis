@@ -31,6 +31,7 @@ def _public_user(user: User) -> dict:
         "email": user.email,
         "role": user.role or "customer",
         "phone": user.phone or "",
+        "cpf": user.cpf or "",
         "newsletter": bool(user.newsletter),
     }
 

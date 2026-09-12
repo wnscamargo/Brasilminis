@@ -310,3 +310,23 @@ Migration `e4f5a6b7c8d9` (não-destrutiva). Branch alvo: `mercado-pago-gateway`.
 
 ### Não deployado — branch `checkout-order-admin-improvements`. Head: `b2c3d4e5f6a7`.
 
+
+---
+
+## CPF no cadastro de cliente (Jun/2026) — mesmo pacote `checkout-order-admin-improvements`
+
+### Entregue
+- **CPF obrigatório no cadastro** (`RegisterInput.cpf`), com máscara `000.000.000-00` no frontend, armazenado **normalizado** (11 dígitos) em `users.cpf` (único, nullable). Validação **matemática** dos dígitos verificadores (`app/core/cpf.py`), rejeita repetidos e formato só por tamanho.
+- **Unicidade** (DB unique + checagem no endpoint) com mensagens amigáveis; **PII-safe** (nunca loga/expõe o CPF nas mensagens).
+- **Legados sem CPF continuam funcionando** (cpf NULL); podem adicionar depois em `/conta` (dica "complete seu cadastro"). `PUT /api/account/profile` aceita cpf com validação/unicidade.
+- **Admin**: coluna CPF em `/admin/clientes` + `PUT /api/admin/customers/{id}` para visualizar/editar (RBAC).
+- **Checkout**: campo CPF/CNPJ do destinatário **pré-preenchido** com o CPF do cadastro; editar/alternar endereço **não** altera o CPF da conta.
+- **Migration** não-destrutiva `c3d4e5f6a7b8` (coluna cpf + índice único).
+- Auth JWT/bcrypt **preservada** (nenhuma mudança em hashing/tokens; playbook do integration_expert seguido).
+
+### Testes (iteration_11): backend 16/16 + frontend 100%, sem bugs
+- `tests/test_cpf.py`: register (válido/inválido/ausente/duplicado com máscara), normalização, PII, profile (legado adiciona depois), admin edit + RBAC, legado sem CPF funcionando. Frontend: máscara no cadastro, `/conta`, `/admin/clientes` (modal), prefill no checkout.
+- Sem regressão no pacote anterior (checkout/cupons/exclusão/®).
+
+### Não deployado — branch `checkout-order-admin-improvements`. Head: `c3d4e5f6a7b8`.
+

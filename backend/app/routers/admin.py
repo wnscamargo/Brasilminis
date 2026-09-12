@@ -27,6 +27,7 @@ from app.schemas import (
     OrderStatusInput,
     ProductImageUrlInput,
     ProductInput,
+    ProfileInput,
 )
 from app.services import analytics_service, category_service
 from app.services import coupon_service
@@ -346,11 +347,35 @@ def admin_list_customers(admin: dict = Depends(get_current_admin), db: Session =
             "name": u.name,
             "email": u.email,
             "phone": u.phone or "",
+            "cpf": u.cpf or "",
             "newsletter": bool(u.newsletter),
             "orders_count": orders_count,
             "created_at": u.created_at,
         })
     return result
+
+
+@router.put("/customers/{user_id}")
+def admin_update_customer(user_id: str, payload: ProfileInput, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    from app.core.cpf import is_valid_cpf, normalize_cpf
+    u = db.get(User, user_id)
+    if not u or u.role != "customer":
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    data = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if "cpf" in data:
+        cpf = normalize_cpf(data.pop("cpf"))
+        if cpf:
+            if not is_valid_cpf(cpf):
+                raise HTTPException(status_code=400, detail="CPF inválido. Verifique os números digitados.")
+            dup = db.query(User).filter(User.cpf == cpf, User.id != u.id).first()
+            if dup:
+                raise HTTPException(status_code=400, detail="Este CPF já está cadastrado.")
+            u.cpf = cpf
+    for k, v in data.items():
+        setattr(u, k, v)
+    db.commit()
+    db.refresh(u)
+    return {"id": u.id, "name": u.name, "email": u.email, "phone": u.phone or "", "cpf": u.cpf or "", "newsletter": bool(u.newsletter)}
 
 
 # ---------------- Banners ----------------

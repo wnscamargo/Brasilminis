@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.security import hash_password, verify_password
+from app.core.cpf import is_valid_cpf, normalize_cpf
 from app.dependencies import get_current_user, get_db
 from app.models import User
 from app.schemas import Address, PasswordChangeInput, ProfileInput
@@ -19,6 +20,7 @@ def _public(user: User) -> dict:
         "email": user.email,
         "role": user.role,
         "phone": user.phone or "",
+        "cpf": user.cpf or "",
         "newsletter": bool(user.newsletter),
     }
 
@@ -27,6 +29,15 @@ def _public(user: User) -> dict:
 def update_profile(payload: ProfileInput, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     fresh = db.get(User, user["id"])
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if "cpf" in updates:
+        cpf = normalize_cpf(updates.pop("cpf"))
+        if cpf:
+            if not is_valid_cpf(cpf):
+                raise HTTPException(status_code=400, detail="CPF inválido. Verifique os números digitados.")
+            dup = db.query(User).filter(User.cpf == cpf, User.id != fresh.id).first()
+            if dup:
+                raise HTTPException(status_code=400, detail="Este CPF já está cadastrado.")
+            fresh.cpf = cpf
     for k, v in updates.items():
         setattr(fresh, k, v)
     db.commit()

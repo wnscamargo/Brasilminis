@@ -1,18 +1,19 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { User, Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
+import { User, Mail, Lock, ArrowRight, Loader2, CreditCard } from "lucide-react";
 import { AuthShell, Field } from "@/pages/Login";
 import { useAuth } from "@/context/AuthContext";
 import api, { formatApiError } from "@/lib/api";
 import { toast } from "sonner";
 import { useCepAutofill, maskCep } from "@/lib/cep";
+import { maskCpf, normalizeCpf } from "@/lib/cpf";
 
 const UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "", email: "", password: "", newsletter: true });
+  const [form, setForm] = useState({ name: "", email: "", password: "", cpf: "", newsletter: true });
   const [addr, setAddr] = useState({ zip: "", street: "", number: "", complement: "", district: "", city: "", state: "" });
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState("");
@@ -45,7 +46,7 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      await register(form);
+      await register({ ...form, cpf: normalizeCpf(form.cpf) });
       if (hasAddress()) {
         try {
           await api.post("/account/addresses", {
@@ -76,6 +77,7 @@ export default function Register() {
         <Field icon={User} placeholder="Nome completo" value={form.name} onChange={(v) => setForm({ ...form, name: v })} testid="register-name" />
         <Field icon={Mail} type="email" placeholder="E-mail" value={form.email} onChange={(v) => setForm({ ...form, email: v })} testid="register-email" />
         <Field icon={Lock} type="password" placeholder="Senha (mín. 6 caracteres)" value={form.password} onChange={(v) => setForm({ ...form, password: v })} testid="register-password" />
+        <Field icon={CreditCard} placeholder="CPF" value={form.cpf} onChange={(v) => setForm({ ...form, cpf: maskCpf(v) })} testid="register-cpf" />
 
         <div className="pt-2 border-t border-[#2e2e2e]">
           <p className="text-xs uppercase tracking-widest text-[#FFC107] font-bold mt-3 mb-3">Endereço (opcional)</p>
