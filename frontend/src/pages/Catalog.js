@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
-import { useSearchParams, useParams } from "react-router-dom";
-import { SlidersHorizontal, X } from "lucide-react";
+import { useSearchParams, useParams, Link } from "react-router-dom";
+import { SlidersHorizontal, X, ChevronDown, ChevronRight } from "lucide-react";
 import api from "@/lib/api";
 import { GROUP_LABELS } from "@/lib/brand";
 import ProductCard from "@/components/ProductCard";
+import { useCategories, findCategoryTrail } from "@/context/CategoriesContext";
 
 const SORTS = [
   { v: "recent", l: "Mais recentes" },
@@ -16,9 +17,9 @@ const SORTS = [
 export default function Catalog() {
   const { group } = useParams();
   const [params, setParams] = useSearchParams();
+  const { tree } = useCategories();
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
-  const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
@@ -30,27 +31,9 @@ export default function Catalog() {
   const onSale = params.get("on_sale") || "";
   const sort = params.get("sort") || "recent";
 
-  const mainCategories = categories.filter((c) => !c.parent_id);
-
-  const childrenByParent = categories.reduce((acc, c) => {
-    if (c.parent_id) {
-      if (!acc[c.parent_id]) acc[c.parent_id] = [];
-      acc[c.parent_id].push(c);
-    }
-    return acc;
-  }, {});
-
-  const selectedCategory = categories.find((c) => c.slug === category);
-  const selectedMainId =
-    selectedCategory?.parent_id || selectedCategory?.id || null;
-
   useEffect(() => {
     api.get("/brands").then((r) => setBrands(r.data));
   }, []);
-
-  useEffect(() => {
-    api.get(`/categories${group ? `?group=${group}` : ""}`).then((r) => setCategories(r.data));
-  }, [group]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,6 +59,7 @@ export default function Catalog() {
     load();
   }, [load]);
 
+  // Só mexe no param informado — preserva os demais (marca, promoção, ordenação).
   const setParam = (key, value) => {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
@@ -83,49 +67,32 @@ export default function Catalog() {
     setParams(next);
   };
 
-  const title = group
-    ? GROUP_LABELS[group] || group
-    : search
-    ? `Resultados para "${search}"`
-    : badge
-    ? badge
-    : onSale
-    ? "Promoções"
-    : "Todos os produtos";
+  // "Todas": limpa APENAS a categoria (mantém marca/promoção/ordenação).
+  const clearCategory = () => setParam("category", "");
+
+  const trail = findCategoryTrail(tree, category);
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-10">
       <div className="bm-stripe rounded-full max-w-[120px] mb-5" />
       <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl lg:text-5xl font-display font-black uppercase tracking-tight text-white" data-testid="catalog-title">
-            {title}
-          </h1>
+          <CatalogHeading trail={trail} group={group} search={search} badge={badge} onSale={onSale} />
           <p className="text-gray-500 mt-2">{total} produto(s) encontrado(s)</p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="lg:hidden flex items-center gap-2 bm-card px-4 py-2.5 text-sm text-white"
-          >
+          <button onClick={() => setShowFilters(!showFilters)} className="lg:hidden flex items-center gap-2 bm-card px-4 py-2.5 text-sm text-white">
             <SlidersHorizontal size={16} /> Filtros
           </button>
-          <select
-            data-testid="sort-select"
-            value={sort}
-            onChange={(e) => setParam("sort", e.target.value)}
-            className="bm-card px-4 py-2.5 text-sm text-white bg-[#1f1f1f] focus:outline-none focus:border-[#1E3A8A]"
-          >
-            {SORTS.map((s) => (
-              <option key={s.v} value={s.v}>{s.l}</option>
-            ))}
+          <select data-testid="sort-select" value={sort} onChange={(e) => setParam("sort", e.target.value)} className="bm-card px-4 py-2.5 text-sm text-white bg-[#1f1f1f] focus:outline-none focus:border-[#1E3A8A]">
+            {SORTS.map((s) => (<option key={s.v} value={s.v}>{s.l}</option>))}
           </select>
         </div>
       </div>
 
       <div className="flex gap-8">
         {/* Filters */}
-        <aside className={`${showFilters ? "block" : "hidden"} lg:block w-full lg:w-64 shrink-0`}>
+        <aside className={`${showFilters ? "block" : "hidden"} lg:block w-full lg:w-72 shrink-0`}>
           <div className="bm-card p-5 sticky top-28">
             <div className="flex items-center justify-between lg:hidden mb-4">
               <span className="font-semibold text-white">Filtros</span>
@@ -133,50 +100,21 @@ export default function Catalog() {
             </div>
 
             <FilterGroup title="Categorias">
-              <FilterItem
-                active={!category}
-                onClick={() => setParam("category", "")}
-                label="Todas"
-              />
-
-              {mainCategories.map((main) => {
-                const children = childrenByParent[main.id] || [];
-                const mainActive = selectedMainId === main.id;
-
-                return (
-                  <div key={main.id} className="mb-1">
-                    <FilterItem
-                      active={category === main.slug}
-                      onClick={() => setParam("category", main.slug)}
-                      label={main.name}
-                    />
-
-                    {children.length > 0 && mainActive && (
-                      <div className="ml-3 mt-1 mb-2 pl-2 border-l border-[#FFC107]/40">
-                        {children.map((sub) => (
-                          <SubcategoryFilterItem
-                            key={sub.id}
-                            active={category === sub.slug}
-                            onClick={() => setParam("category", sub.slug)}
-                            label={sub.name}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              <FilterItem active={!category} onClick={clearCategory} label="Todas" testid="filter-cat-todas" />
+              {tree.map((cat) => (
+                <CategoryFilterNode
+                  key={cat.id}
+                  cat={cat}
+                  activeSlug={category}
+                  onSelect={(slug) => setParam("category", slug)}
+                />
+              ))}
             </FilterGroup>
 
             <FilterGroup title="Marcas">
               <FilterItem active={!brand} onClick={() => setParam("brand", "")} label="Todas" />
               {brands.map((b) => (
-                <FilterItem
-                  key={b.id}
-                  active={brand === b.slug}
-                  onClick={() => setParam("brand", b.slug)}
-                  label={b.name}
-                />
+                <FilterItem key={b.id} active={brand === b.slug} onClick={() => setParam("brand", b.slug)} label={b.name} />
               ))}
             </FilterGroup>
 
@@ -190,9 +128,7 @@ export default function Catalog() {
         <div className="flex-1">
           {loading ? (
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="bm-card aspect-[3/4] animate-pulse" />
-              ))}
+              {Array.from({ length: 8 }).map((_, i) => (<div key={i} className="bm-card aspect-[3/4] animate-pulse" />))}
             </div>
           ) : products.length === 0 ? (
             <div className="bm-card p-16 text-center">
@@ -200,9 +136,7 @@ export default function Catalog() {
             </div>
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6" data-testid="products-grid">
-              {products.map((p, i) => (
-                <ProductCard key={p.id} product={p} index={i} />
-              ))}
+              {products.map((p, i) => (<ProductCard key={p.id} product={p} index={i} />))}
             </div>
           )}
         </div>
@@ -211,40 +145,96 @@ export default function Catalog() {
   );
 }
 
+function CatalogHeading({ trail, group, search, badge, onSale }) {
+  if (trail) {
+    return (
+      <div data-testid="catalog-header">
+        <nav className="flex items-center gap-2 text-xs uppercase tracking-widest text-gray-500 mb-2" data-testid="catalog-breadcrumb">
+          <Link to={`/produtos?category=${trail.main.slug}`} className="hover:text-[#FFC107]">{trail.main.name}</Link>
+          {trail.sub && (<><ChevronRight size={12} /><span className="text-[#FFC107]">{trail.sub.name}</span></>)}
+        </nav>
+        <h1 className="text-3xl lg:text-5xl font-display font-black uppercase tracking-tight text-white" data-testid="catalog-title">
+          {trail.sub ? trail.sub.name : trail.main.name}
+        </h1>
+      </div>
+    );
+  }
+  const title = group
+    ? GROUP_LABELS[group] || group
+    : search
+    ? `Resultados para "${search}"`
+    : badge
+    ? badge
+    : onSale
+    ? "Promoções"
+    : "Todos os produtos";
+  return (
+    <h1 className="text-3xl lg:text-5xl font-display font-black uppercase tracking-tight text-white" data-testid="catalog-title">
+      {title}
+    </h1>
+  );
+}
+
 function FilterGroup({ title, children }) {
   return (
     <div className="mb-6 last:mb-0">
       <h4 className="text-xs uppercase tracking-widest text-[#FFC107] font-bold mb-3">{title}</h4>
-      <div className="space-y-1 max-h-64 overflow-y-auto pr-1">{children}</div>
+      <div className="space-y-1">{children}</div>
     </div>
   );
 }
 
-function FilterItem({ active, onClick, label }) {
+// Accordion de categoria principal + subcategorias (sem limite de altura/scroll).
+function CategoryFilterNode({ cat, activeSlug, onSelect }) {
+  const kids = cat.children || [];
+  const childActive = kids.some((k) => k.slug === activeSlug);
+  const [expanded, setExpanded] = useState(childActive);
+  const slugTest = cat.slug.replace(/[^a-z0-9]/g, "");
+  return (
+    <div>
+      <div className="flex items-center">
+        <button
+          onClick={() => onSelect(cat.slug)}
+          data-testid={`filter-cat-${slugTest}`}
+          className={`flex-1 text-left text-sm px-3 py-1.5 rounded-lg transition-colors ${
+            activeSlug === cat.slug ? "bg-[#1E3A8A] text-white" : "text-gray-300 hover:text-white hover:bg-white/5"
+          } font-semibold`}
+        >
+          {cat.name}
+        </button>
+        {kids.length > 0 && (
+          <button onClick={() => setExpanded((v) => !v)} data-testid={`filter-toggle-${slugTest}`} aria-label={`Expandir ${cat.name}`} className="p-1.5 text-gray-500 hover:text-white">
+            {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          </button>
+        )}
+      </div>
+      {expanded && kids.length > 0 && (
+        <div className="ml-3 mt-1 border-l border-[#2e2e2e] pl-2 space-y-1">
+          {kids.map((sub) => (
+            <FilterItem
+              key={sub.id}
+              active={activeSlug === sub.slug}
+              onClick={() => onSelect(sub.slug)}
+              label={sub.name}
+              testid={`filter-sub-${sub.slug.replace(/[^a-z0-9]/g, "")}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilterItem({ active, onClick, label, testid }) {
   return (
     <button
       onClick={onClick}
+      data-testid={testid}
       className={`block w-full text-left text-sm px-3 py-1.5 rounded-lg transition-colors ${
         active ? "bg-[#1E3A8A] text-white" : "text-gray-400 hover:text-white hover:bg-white/5"
       }`}
     >
       {label}
-    </button>
-  );
-}
-
-
-function SubcategoryFilterItem({ active, onClick, label }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`block w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors ${
-        active
-          ? "bg-[#FFC107]/15 text-[#FFC107] font-semibold"
-          : "text-gray-500 hover:text-white hover:bg-white/5"
-      }`}
-    >
-      ↳ {label}
     </button>
   );
 }
