@@ -14,6 +14,17 @@ ADMIN_EMAIL = "admin@brasilminis.com"
 ADMIN_PASSWORD = "Admin@2025"
 
 
+def _gen_cpf():
+    import random
+    while True:
+        base = [random.randint(0, 9) for _ in range(9)]
+        d1 = sum(base[i] * (10 - i) for i in range(9)) * 10 % 11 % 10
+        d2 = (sum(base[i] * (11 - i) for i in range(9)) + d1 * 2) * 10 % 11 % 10
+        cpf = "".join(map(str, base + [d1, d2]))
+        if cpf != cpf[0] * 11:
+            return cpf
+
+
 # ------------- Fixtures -------------
 @pytest.fixture(scope="module")
 def admin_session():
@@ -28,7 +39,7 @@ def _new_customer():
     email = f"TEST_{uuid.uuid4().hex[:8]}@example.com"
     s = requests.Session()
     r = s.post(f"{BASE_URL}/api/auth/register", json={
-        "name": "Cliente Cupom", "email": email, "password": "senha123", "newsletter": False,
+        "name": "Cliente Cupom", "email": email, "password": "senha123", "newsletter": False, "cpf": _gen_cpf(),
     }, timeout=30)
     assert r.status_code == 200, r.text
     return s, r.json()["id"], email
@@ -65,6 +76,18 @@ def sample_products():
     items = r.json()["items"]
     assert items, "Expected seed products"
     return items
+
+
+@pytest.fixture(scope="module")
+def orderable(admin_session):
+    """Dedicated high-stock product so order-placing tests never hit stock exhaustion."""
+    name = f"TEST Orderable {uuid.uuid4().hex[:6]}"
+    r = admin_session.post(f"{BASE_URL}/api/admin/products", json={
+        "name": name, "description": "coupon order test", "price": 100.0,
+        "stock": 999, "images": [], "badges": [], "specs": {},
+    }, timeout=15)
+    assert r.status_code == 200, r.text
+    return r.json()
 
 
 # ------------- Preview (server-side calc) -------------
@@ -114,14 +137,14 @@ class TestCouponPreview:
 
 # ------------- Order with coupon -> snapshot + used_count -------------
 class TestOrderCoupon:
-    def test_order_freezes_snapshot_and_increments_used_count(self, admin_session, bm10, sample_products):
+    def test_order_freezes_snapshot_and_increments_used_count(self, admin_session, bm10, orderable):
         # get baseline used_count for BM10
         base = next(c for c in admin_session.get(f"{BASE_URL}/api/admin/coupons").json() if c["code"] == "BM10")
         base_used = base["used_count"] or 0
 
         # fresh customer
         s, uid, email = _new_customer()
-        p = sample_products[0]
+        p = orderable
         qty = max(1, int(60 / max(1, float(p["price"]))) + 1)
         r = s.post(f"{BASE_URL}/api/orders", json={
             "items": [{"product_id": p["id"], "quantity": qty}],
@@ -178,12 +201,12 @@ class TestCouponLimits:
         assert "expirado" in r.json()["detail"].lower()
         admin_session.delete(f"{BASE_URL}/api/admin/coupons/{code}")
 
-    def test_usage_limit_exhausted(self, admin_session, customer_session, sample_products):
+    def test_usage_limit_exhausted(self, admin_session, customer_session, orderable):
         code = self._create(admin_session, usage_limit=1)
         # Manually bump used_count via update? The service exposes used_count only through orders.
         # Simulate by updating via PUT? update_coupon doesn't accept used_count. Instead, place one order.
         s, _, _ = _new_customer()
-        p = sample_products[0]
+        p = orderable
         r1 = s.post(f"{BASE_URL}/api/orders", json={
             "items": [{"product_id": p["id"], "quantity": 1}],
             "shipping_method": "standard", "payment_method": "pix", "coupon": code,
@@ -197,10 +220,10 @@ class TestCouponLimits:
         assert "esgotado" in r2.json()["detail"].lower() or "limite" in r2.json()["detail"].lower()
         admin_session.delete(f"{BASE_URL}/api/admin/coupons/{code}")
 
-    def test_per_user_limit(self, admin_session, sample_products):
+    def test_per_user_limit(self, admin_session, orderable):
         code = self._create(admin_session, per_user_limit=1)
         s, _, _ = _new_customer()
-        p = sample_products[0]
+        p = orderable
         r1 = s.post(f"{BASE_URL}/api/orders", json={
             "items": [{"product_id": p["id"], "quantity": 1}],
             "shipping_method": "standard", "payment_method": "pix", "coupon": code,
@@ -214,10 +237,10 @@ class TestCouponLimits:
         assert "máximo" in r2.json()["detail"].lower() or "maximo" in r2.json()["detail"].lower() or "utiliz" in r2.json()["detail"].lower()
         admin_session.delete(f"{BASE_URL}/api/admin/coupons/{code}")
 
-    def test_first_purchase_only(self, admin_session, sample_products):
+    def test_first_purchase_only(self, admin_session, orderable):
         code = self._create(admin_session, first_purchase_only=True)
         s, _, _ = _new_customer()
-        p = sample_products[0]
+        p = orderable
         # place a first order WITHOUT coupon so user is no longer "first purchase"
         r_first = s.post(f"{BASE_URL}/api/orders", json={
             "items": [{"product_id": p["id"], "quantity": 1}],
@@ -261,7 +284,7 @@ class TestCouponScope:
 
 # ------------- Free shipping coupon -------------
 class TestFreeShipping:
-    def test_free_shipping_applies(self, admin_session, sample_products):
+    def test_free_shipping_applies(self, admin_session, orderable):
         # Ensure FRETEGRATIS is a free_shipping coupon (NB: seed originally has type=fixed value=29.9)
         # Update to correct definition for the test.
         admin_session.put(f"{BASE_URL}/api/admin/coupons/FRETEGRATIS", json={
@@ -269,7 +292,7 @@ class TestFreeShipping:
             "active": True, "free_shipping": True, "description": "Frete grátis",
         }, timeout=15)
         s, _, _ = _new_customer()
-        p = sample_products[0]
+        p = orderable
         r = s.post(f"{BASE_URL}/api/orders", json={
             "items": [{"product_id": p["id"], "quantity": 1}],
             "shipping_method": "standard", "payment_method": "pix",

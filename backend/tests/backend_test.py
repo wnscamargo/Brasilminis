@@ -15,6 +15,17 @@ ADMIN_EMAIL = "admin@brasilminis.com"
 ADMIN_PASSWORD = "Admin@2025"
 
 
+def _gen_cpf():
+    import random
+    while True:
+        base = [random.randint(0, 9) for _ in range(9)]
+        d1 = sum(base[i] * (10 - i) for i in range(9)) * 10 % 11 % 10
+        d2 = (sum(base[i] * (11 - i) for i in range(9)) + d1 * 2) * 10 % 11 % 10
+        cpf = "".join(map(str, base + [d1, d2]))
+        if cpf != cpf[0] * 11:
+            return cpf
+
+
 # ---------- Fixtures ----------
 @pytest.fixture(scope="session")
 def admin_session():
@@ -32,7 +43,7 @@ def customer_creds():
     password = "senha123"
     s = requests.Session()
     r = s.post(f"{BASE_URL}/api/auth/register", json={
-        "name": "Cliente Teste", "email": email, "password": password, "newsletter": False
+        "name": "Cliente Teste", "email": email, "password": password, "newsletter": False, "cpf": _gen_cpf()
     }, timeout=30)
     assert r.status_code == 200, f"Register failed: {r.status_code} {r.text}"
     return {"email": email, "password": password, "id": r.json()["id"], "session": s}
@@ -251,7 +262,17 @@ class TestOrders:
         assert after["stock"] == stock_before, "Stock changed after failed oversell"
 
     def test_concurrent_no_negative_stock(self, customer_session):
-        product = self._pick_product(min_stock=2)
+        # Use a dedicated freshly-created product so the invariant is deterministic
+        # even when the full suite has depleted shared catalog stock.
+        admin = requests.Session()
+        admin.post(f"{BASE_URL}/api/auth/login",
+                   json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=15)
+        cr = admin.post(f"{BASE_URL}/api/admin/products", json={
+            "name": f"TEST Concurrent {uuid.uuid4().hex[:6]}", "description": "concurrency",
+            "price": 10.0, "stock": 6, "images": [], "badges": [], "specs": {},
+        }, timeout=15)
+        assert cr.status_code == 200, cr.text
+        product = cr.json()
         pid = product["id"]
         slug = product["slug"]
         stock_before = product["stock"]

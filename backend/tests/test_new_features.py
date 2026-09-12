@@ -21,6 +21,17 @@ ADMIN_EMAIL = "admin@brasilminis.com"
 ADMIN_PASSWORD = "Admin@2025"
 
 
+def _gen_cpf():
+    import random
+    while True:
+        base = [random.randint(0, 9) for _ in range(9)]
+        d1 = sum(base[i] * (10 - i) for i in range(9)) * 10 % 11 % 10
+        d2 = (sum(base[i] * (11 - i) for i in range(9)) + d1 * 2) * 10 % 11 % 10
+        cpf = "".join(map(str, base + [d1, d2]))
+        if cpf != cpf[0] * 11:
+            return cpf
+
+
 # -------- Fixtures --------
 @pytest.fixture(scope="module")
 def admin_session():
@@ -36,7 +47,7 @@ def customer_session():
     email = f"TEST_{uuid.uuid4().hex[:8]}@example.com"
     s = requests.Session()
     r = s.post(f"{BASE_URL}/api/auth/register", json={
-        "name": "Cliente CMV", "email": email, "password": "senha123", "newsletter": False,
+        "name": "Cliente CMV", "email": email, "password": "senha123", "newsletter": False, "cpf": _gen_cpf(),
     }, timeout=30)
     assert r.status_code == 200, r.text
     return s

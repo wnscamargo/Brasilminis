@@ -58,6 +58,13 @@ chainlit.md
 .ipynb_checkpoints/
 .ac
 
+# Test/preview artifacts (do not ship to production branch)
+test_reports/iteration_*.json
+test_reports/pytest/*.xml
+
+# Runtime user uploads (persisted on server volume, not in VCS)
+backend/uploads/
+
 # Deployment
 .vercel
 

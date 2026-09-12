@@ -330,3 +330,34 @@ Migration `e4f5a6b7c8d9` (não-destrutiva). Branch alvo: `mercado-pago-gateway`.
 
 ### Não deployado — branch `checkout-order-admin-improvements`. Head: `c3d4e5f6a7b8`.
 
+
+---
+
+## CONSOLIDAÇÃO FINAL + AUDITORIA (12/Jun/2026) — branch alvo `production-improvements-sep2026`
+
+### Objetivo
+Consolidar em UMA branch final todos os pacotes A–F (institucional/CEP/redes, checkout+endereço, cupons de desconto, exclusão protegida, CPF, Brasil Minis®), baseada na `python-vps` mais recente, SEM regressão e SEM deploy.
+
+### Achado principal
+Nenhuma alteração de CÓDIGO DE APLICAÇÃO foi necessária: todos os recursos A–F já estavam implementados e o comportamento é idêntico ao já testado (iteration_11). Esta sessão fez apenas: (1) atualização dos testes backend antigos para o novo contrato de CPF obrigatório + fixtures determinísticas de estoque; (2) limpeza de `.gitignore` (artefatos de teste e uploads runtime fora do VCS).
+
+### Resultado da auditoria (PREVIEW, sem deploy)
+- **Alembic**: 1 único head `c3d4e5f6a7b8`; cadeia linear válida base→head (10 migrations). As três exigidas (`a1b2c3d4e5f6` → `b2c3d4e5f6a7` → `c3d4e5f6a7b8`) estão no topo, sem múltiplos heads.
+- **/api/health**: `status ok`, `database ok`, `migration current`.
+- **Backend pytest**: 163 passed, 1 skipped, 0 failed (rodado via HTTPS do preview).
+- **Frontend**: `yarn build` sem erros; home renderiza com Brasil Minis® e menu dinâmico de categorias.
+- **Segurança**: nenhum secret/token commitado; `.env` não rastreado; credenciais operacionais (MP/ME) em DB (Fernet).
+- **Artefatos**: `test_reports/*.json` e `pytest/*.xml` removidos do rastreio; `backend/uploads/` ignorado (conteúdo runtime).
+- **Preservados (verificados em código + smoke)**: árvore dinâmica de categorias/subcategorias, CategoriesContext, dropdown/acordeão, Central de Integrações, Mercado Pago (payments.py), Melhor Envio (melhor_envio.py), checkout real, estoque, catálogo, auth JWT/bcrypt, Admin.
+
+### Observações (dados de preview, NÃO afetam código/produção)
+- Menu público mostra categorias "TEST MAIN..." e produtos "TEST ..." criados pelas suítes de teste no DB compartilhado do preview. Não existem no código nem na produção (python-vps tem seu próprio DB).
+- `frontend/yarn.lock` não é rastreado (estado pré-existente do main); build funciona normalmente.
+
+### Git — como salvar na branch final (NÃO feito automaticamente)
+O pod não tem remoto; criar/baserar branch em `python-vps` é feito via "Save to Github":
+1. No GitHub: criar `production-improvements-sep2026` a partir de `python-vps` (última versão).
+2. No Emergent: botão Save → Save to Github → selecionar a branch → push.
+3. No GitHub: abrir PR `production-improvements-sep2026` → `python-vps`, revisar diff, mergear.
+
+### NENHUM DEPLOY realizado. NENHUM dado real de produção alterado.

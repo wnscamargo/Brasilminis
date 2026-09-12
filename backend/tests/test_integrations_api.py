@@ -17,6 +17,17 @@ ADMIN_EMAIL = "admin@brasilminis.com"
 ADMIN_PASSWORD = "Admin@2025"
 
 
+def _gen_cpf():
+    import random
+    while True:
+        base = [random.randint(0, 9) for _ in range(9)]
+        d1 = sum(base[i] * (10 - i) for i in range(9)) * 10 % 11 % 10
+        d2 = (sum(base[i] * (11 - i) for i in range(9)) + d1 * 2) * 10 % 11 % 10
+        cpf = "".join(map(str, base + [d1, d2]))
+        if cpf != cpf[0] * 11:
+            return cpf
+
+
 @pytest.fixture(scope="module")
 def admin_session():
     s = requests.Session()
@@ -37,7 +48,7 @@ def customer_session():
     s = requests.Session()
     email = f"TEST_cli_{uuid.uuid4().hex[:8]}@test.com"
     reg = s.post(f"{BASE_URL}/api/auth/register",
-                 json={"name": "Test Client", "email": email, "password": "Teste@123"}, timeout=20)
+                 json={"name": "Test Client", "email": email, "password": "Teste@123", "cpf": _gen_cpf()}, timeout=20)
     if reg.status_code not in (200, 201):
         # try login (fallback)
         s.post(f"{BASE_URL}/api/auth/login",
