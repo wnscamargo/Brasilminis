@@ -236,6 +236,8 @@ class SiteSettings(Base):
     logo_url = Column(String, nullable=True)       # None => usa a logo padrão (fallback)
     logo_width = Column(Integer, default=200)       # largura máx. no desktop (px)
     branding = Column(JSONB, default=dict)          # extensível: favicon, cores, og, etc.
+    institutional_content = Column(JSONB, default=dict)  # páginas institucionais (Sobre, Contato, Trocas, Frete)
+    social_links = Column(JSONB, default=dict)      # redes sociais {plataforma: {url, active}}
     updated_at = Column(String, nullable=True)
     updated_by = Column(String, nullable=True)
 

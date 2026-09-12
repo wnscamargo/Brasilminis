@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Package, MapPin, User, KeyRound, LogOut, Plus, Trash2, ShieldCheck } from "lucide-react";
+import { Package, MapPin, User, KeyRound, LogOut, Plus, Trash2, ShieldCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
 import { formatBRL } from "@/lib/brand";
 import { useAuth } from "@/context/AuthContext";
+import { useCepAutofill, maskCep } from "@/lib/cep";
 
 const TABS = [
   { k: "orders", l: "Pedidos", icon: Package },
@@ -109,6 +110,22 @@ function Orders({ orders }) {
 function Addresses({ addresses, setAddresses }) {
   const [show, setShow] = useState(false);
   const [form, setForm] = useState({ label: "Casa", recipient: "", street: "", number: "", complement: "", district: "", city: "", state: "", zip: "" });
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState("");
+
+  const cepAutofill = useCepAutofill(
+    (data) => {
+      setForm((f) => ({ ...f, street: data.street || f.street, district: data.district || f.district, city: data.city || f.city, state: data.uf || f.state }));
+      setCepLoading(false); setCepError("");
+    },
+    { onStart: () => { setCepLoading(true); setCepError(""); }, onError: () => { setCepLoading(false); setCepError("CEP não encontrado. Preencha manualmente."); } }
+  );
+
+  const onZip = (v) => {
+    const masked = maskCep(v);
+    setForm((f) => ({ ...f, zip: masked }));
+    cepAutofill(v);
+  };
 
   const save = async (e) => {
     e.preventDefault();
@@ -126,6 +143,8 @@ function Addresses({ addresses, setAddresses }) {
     setAddresses(data);
   };
 
+  const inputCls = "bg-[#111111] border border-[#2e2e2e] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#1E3A8A]";
+
   return (
     <div>
       <button onClick={() => setShow(!show)} data-testid="add-address-btn" className="mb-4 bg-[#1E3A8A] text-white font-semibold rounded-full px-5 py-2.5 flex items-center gap-2">
@@ -133,9 +152,18 @@ function Addresses({ addresses, setAddresses }) {
       </button>
       {show && (
         <form onSubmit={save} className="bm-card p-5 mb-4 grid grid-cols-2 gap-3">
-          {[["recipient","Destinatário"],["zip","CEP"],["street","Rua"],["number","Número"],["district","Bairro"],["city","Cidade"],["state","Estado"],["complement","Complemento"]].map(([k,l]) => (
-            <input key={k} required={k!=="complement"} placeholder={l} value={form[k]} onChange={(e)=>setForm({...form,[k]:e.target.value})} data-testid={`new-addr-${k}`} className="bg-[#111111] border border-[#2e2e2e] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#1E3A8A]" />
-          ))}
+          <input required placeholder="Destinatário" value={form.recipient} onChange={(e)=>setForm({...form,recipient:e.target.value})} data-testid="new-addr-recipient" className={`${inputCls} col-span-2`} />
+          <div className="relative col-span-2 sm:col-span-1">
+            <input required placeholder="CEP" value={form.zip} onChange={(e)=>onZip(e.target.value)} data-testid="new-addr-zip" inputMode="numeric" className={`${inputCls} w-full`} />
+            {cepLoading && <Loader2 size={16} className="absolute right-3 top-3 animate-spin text-[#FFC107]" data-testid="addr-cep-loading" />}
+          </div>
+          <input required placeholder="Rua" value={form.street} onChange={(e)=>setForm({...form,street:e.target.value})} data-testid="new-addr-street" className={inputCls} />
+          <input required placeholder="Número" value={form.number} onChange={(e)=>setForm({...form,number:e.target.value})} data-testid="new-addr-number" className={inputCls} />
+          <input placeholder="Complemento (opcional)" value={form.complement} onChange={(e)=>setForm({...form,complement:e.target.value})} data-testid="new-addr-complement" className={inputCls} />
+          <input required placeholder="Bairro" value={form.district} onChange={(e)=>setForm({...form,district:e.target.value})} data-testid="new-addr-district" className={inputCls} />
+          <input required placeholder="Cidade" value={form.city} onChange={(e)=>setForm({...form,city:e.target.value})} data-testid="new-addr-city" className={inputCls} />
+          <input required placeholder="Estado (UF)" value={form.state} onChange={(e)=>setForm({...form,state:e.target.value})} data-testid="new-addr-state" className={inputCls} />
+          {cepError && <p className="col-span-2 text-xs text-[#FFC107]" data-testid="addr-cep-error">{cepError}</p>}
           <button className="col-span-2 bg-[#FFC107] text-[#111111] font-bold rounded-full py-3">Salvar endereço</button>
         </form>
       )}

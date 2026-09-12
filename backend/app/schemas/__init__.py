@@ -246,3 +246,44 @@ class SiteSettingsInput(BaseModel):
 class SiteConfigInput(BaseModel):
     logo_width: int = Field(default=200, ge=60, le=500)
     branding: Optional[dict] = None
+
+
+# ---------- Conteúdo institucional (Sobre, Contato, Trocas, Frete) ----------
+class InstitutionalPage(BaseModel):
+    title: Optional[str] = ""
+    subtitle: Optional[str] = ""
+    content: Optional[str] = ""  # Markdown (sanitizado no servidor)
+    active: bool = True
+    seo_title: Optional[str] = ""
+    seo_description: Optional[str] = ""
+    # Campos estruturados (usados sobretudo na página Contato)
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    whatsapp: Optional[str] = None
+    hours: Optional[str] = None
+    address: Optional[str] = None
+    map_url: Optional[str] = None
+
+
+class SiteContentInput(BaseModel):
+    about: Optional[InstitutionalPage] = None
+    contact: Optional[InstitutionalPage] = None
+    returns: Optional[InstitutionalPage] = None
+    shipping: Optional[InstitutionalPage] = None
+
+
+# ---------- Redes sociais ----------
+class SocialLink(BaseModel):
+    url: Optional[str] = ""
+    active: bool = False
+
+
+class SocialLinksInput(BaseModel):
+    instagram: Optional[SocialLink] = None
+    facebook: Optional[SocialLink] = None
+    tiktok: Optional[SocialLink] = None
+    youtube: Optional[SocialLink] = None
+    whatsapp: Optional[SocialLink] = None
+    telegram: Optional[SocialLink] = None
+    twitter: Optional[SocialLink] = None
+    pinterest: Optional[SocialLink] = None

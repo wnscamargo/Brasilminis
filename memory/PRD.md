@@ -273,3 +273,22 @@ Migration `e4f5a6b7c8d9` (não-destrutiva). Branch alvo: `mercado-pago-gateway`.
 ### Não deployado
 - Trabalho no preview; salvar via "Save to Github" na branch `fix-public-category-tree`.
 
+
+---
+
+## Conteúdo institucional + Redes sociais + CEP no cadastro (Jun/2026) — branch `site-content-and-customer-address`
+
+### Entregue
+- **CEP automático no cadastro** (`Register.js`): seção de endereço opcional com autofill (logradouro/bairro/cidade/UF) via `GET /api/cep/{cep}`; número obrigatório quando há endereço, complemento opcional (nenhum autopreenchido); loading discreto e erro amigável; não bloqueia o cadastro se o CEP falhar (endereço salvo via `POST /account/addresses` após registrar, com aviso se falhar). Mesmo helper `useCepAutofill` (agora com `onStart/onError`) reutilizado no formulário de endereços da conta (`Account.js`), checkout e remetente ME.
+- **Páginas institucionais configuráveis** (Sobre, Contato, Trocas e Devoluções, Frete e Entrega): `site_settings.institutional_content` (JSONB). Cada página: título, subtítulo, conteúdo Markdown sanitizado (bleach — remove script/iframe/js), ativo/inativo, SEO title/description. Contato tem campos estruturados (email, telefone, whatsapp, horário, endereço, mapa). Rotas públicas `/sobre`, `/trocas-devolucoes`, `/frete-entrega`, `/contato` consomem do banco via `useSiteContent` + `MarkdownContent` (react-markdown, sem HTML bruto). Nada hardcoded no React (defaults moram no service).
+- **Redes sociais configuráveis** (`social_links` JSONB): Instagram, Facebook, TikTok, YouTube, WhatsApp, Telegram, X/Twitter, Pinterest — cada uma com URL + ativo. Público (`GET /api/site-content` e `/api/site-config`) expõe só as ativas com URL. Footer e Contato renderizam via `SocialLinks` (target=_blank rel=noopener). WhatsApp aceita URL completa ou número (gera `wa.me/<digitos>`).
+- **Admin** (`AdminContent.js`, rota `/admin/conteudo`, menu "Conteúdo do Site"): abas por página + aba Redes Sociais, toggle ativo, botão "Visualizar página", "Salvar alterações". RBAC: só admin altera (`get_current_admin`); público só leitura.
+- **Endpoints**: `GET /api/site-content` (público), `GET/PUT /api/admin/site-content`, `GET/PUT /api/admin/social-links`. `site-config` agora inclui `social_links`.
+- **Migration** `a1b2c3d4e5f6` (não-destrutiva): adiciona `institutional_content` e `social_links` (JSONB) em `site_settings`.
+
+### Testes (iteration_9) — 100%, sem bugs
+- Backend 11/11 (`tests/test_site_content.py`): shape público, RBAC 401, sanitização XSS, URL javascript/sem-scheme → 400, página inativa some do público, rede vazia normalizada, CEP válido/inválido. Frontend: institucionais + contato (só campos preenchidos) + CEP no cadastro (número/complemento preservados, erro amigável) + Admin→público sem redeploy + redes sociais no footer/contato. Aplicadas melhorias: testids ASCII no Contato, aviso ao falhar endereço no cadastro, WhatsApp por número.
+
+### Não deployado
+- Preview apenas; salvar via "Save to Github" na branch `site-content-and-customer-address`. Migration head: `a1b2c3d4e5f6`. Nova dep backend: `bleach`; frontend: `react-markdown`.
+

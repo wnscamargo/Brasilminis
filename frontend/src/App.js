@@ -23,6 +23,7 @@ import Account from "@/pages/Account";
 import Favorites from "@/pages/Favorites";
 import Brands from "@/pages/Brands";
 import Contact from "@/pages/Contact";
+import InstitutionalPage from "@/pages/InstitutionalPage";
 import { ForgotPassword, ResetPassword } from "@/pages/PasswordRecovery";
 
 import AdminLayout from "@/pages/admin/AdminLayout";
@@ -38,6 +39,7 @@ import AdminBranding from "@/pages/admin/AdminBranding";
 import AdminMelhorEnvio from "@/pages/admin/AdminMelhorEnvio";
 import AdminMercadoPago from "@/pages/admin/AdminMercadoPago";
 import AdminIntegracoes from "@/pages/admin/AdminIntegracoes";
+import AdminContent from "@/pages/admin/AdminContent";
 
 const Shell = ({ children }) => <Layout>{children}</Layout>;
 
@@ -60,6 +62,9 @@ function App() {
                 <Route path="/produto/:slug" element={<Shell><ProductDetail /></Shell>} />
                 <Route path="/marcas" element={<Shell><Brands /></Shell>} />
                 <Route path="/contato" element={<Shell><Contact /></Shell>} />
+                <Route path="/sobre" element={<Shell><InstitutionalPage pageKey="about" /></Shell>} />
+                <Route path="/trocas-devolucoes" element={<Shell><InstitutionalPage pageKey="returns" /></Shell>} />
+                <Route path="/frete-entrega" element={<Shell><InstitutionalPage pageKey="shipping" /></Shell>} />
                 <Route path="/carrinho" element={<Shell><Cart /></Shell>} />
                 <Route path="/checkout" element={<Shell><Checkout /></Shell>} />
                 <Route path="/favoritos" element={<Shell><Favorites /></Shell>} />
@@ -85,6 +90,7 @@ function App() {
                   <Route path="banners" element={<AdminBanners />} />
                   <Route path="site" element={<AdminSite />} />
                   <Route path="identidade" element={<AdminBranding />} />
+                  <Route path="conteudo" element={<AdminContent />} />
                   <Route path="integracoes" element={<AdminIntegracoes />} />
                   <Route path="melhor-envio" element={<AdminMelhorEnvio />} />
                   <Route path="mercado-pago" element={<AdminMercadoPago />} />
