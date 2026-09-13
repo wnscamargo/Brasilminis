@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, Trash2, X, Pencil, ChevronRight, FolderTree, Eye, EyeOff, Boxes, Home, Star } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
@@ -97,6 +98,7 @@ export default function AdminCategories() {
 }
 
 function CategoryProductsModal({ cat, onClose }) {
+  const navigate = useNavigate();
   const [data, setData] = useState({ items: [], total: 0 });
   const [q, setQ] = useState("");
   const [active, setActive] = useState("");
@@ -128,9 +130,9 @@ function CategoryProductsModal({ cat, onClose }) {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-[#111] text-gray-500 uppercase text-xs"><tr><th className="text-left p-3">Produto</th><th className="text-left p-3">SKU</th><th className="text-left p-3">Preço</th><th className="text-left p-3">Estoque</th><th className="text-left p-3">Badges</th><th className="text-left p-3">Ativo</th></tr></thead>
+            <thead className="bg-[#111] text-gray-500 uppercase text-xs"><tr><th className="text-left p-3">Produto</th><th className="text-left p-3">SKU</th><th className="text-left p-3">Preço</th><th className="text-left p-3">Estoque</th><th className="text-left p-3">Badges</th><th className="text-left p-3">Ativo</th><th className="p-3"></th></tr></thead>
             <tbody>
-              {data.items.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-gray-500">Nenhum produto neste nó.</td></tr>}
+              {data.items.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-gray-500">Nenhum produto neste nó.</td></tr>}
               {data.items.map((p) => (
                 <tr key={p.id} className="border-t border-[#2e2e2e]" data-testid={`catprod-row-${p.id}`}>
                   <td className="p-3"><div className="flex items-center gap-2"><img src={p.images?.[0]} alt="" className="h-9 w-9 rounded object-cover bg-[#222]" /><span className="text-white line-clamp-1 max-w-[200px]">{p.name}</span></div></td>
@@ -139,6 +141,10 @@ function CategoryProductsModal({ cat, onClose }) {
                   <td className="p-3 text-gray-300">{p.stock}</td>
                   <td className="p-3 text-gray-400 text-xs">{(p.badges || []).join(", ") || "—"}</td>
                   <td className="p-3">{p.is_active ? <span className="text-[#009B3A]">Sim</span> : <span className="text-gray-600">Não</span>}</td>
+                  <td className="p-3 text-right">
+                    <button onClick={() => navigate(`/admin/produtos?edit=${p.id}`)} data-testid={`catprod-edit-${p.id}`}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#FFC107] hover:text-[#ffcf3f]"><Pencil size={13} /> Editar</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
