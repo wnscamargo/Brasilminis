@@ -1,15 +1,18 @@
 """Catálogo: Home dinâmica, contagem ativa, badges CRUD, produtos por categoria."""
 import os, uuid, requests, pytest
+from .test_helpers import preserve_auth_cookie
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
-A = ("admin@brasilminis.com", "Admin@2025")
+BASE = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8001").rstrip("/")
+ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 
 
 @pytest.fixture(scope="module")
 def adm():
     s = requests.Session()
-    r = s.post(f"{BASE}/api/auth/login", json={"email": A[0], "password": A[1]}, timeout=30)
-    assert r.status_code == 200
+    r = s.post(f"{BASE}/api/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=30)
+    assert r.status_code == 200, r.text
+    preserve_auth_cookie(s, r)
     return s
 
 
