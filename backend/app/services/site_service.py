@@ -174,6 +174,8 @@ DEFAULT_CONTENT = {
         "active": True, "seo_title": "Contato | Brasil Minis", "seo_description": "Entre em contato com a Brasil Minis.",
         "email": "contato@brasilminis.com.br", "phone": "(11) 99999-0000", "whatsapp": "",
         "hours": "Seg a Sex, 9h às 18h", "address": "São Paulo · SP · Brasil", "map_url": "",
+        "show_email": True, "show_phone": True, "show_whatsapp": True,
+        "show_hours": True, "show_address": True, "show_map_url": True,
     },
     "returns": {
         "title": "Trocas e Devoluções",
@@ -255,7 +257,7 @@ def _public_page(page_key: str, data: dict) -> dict:
     if page_key == "contact":
         for k in ("email", "phone", "whatsapp", "hours", "address", "map_url"):
             v = data.get(k)
-            if v:
+            if v and data.get(f"show_{k}", True):
                 pub[k] = v
     return pub
 
@@ -306,6 +308,8 @@ def update_content(db: Session, data: dict, updated_by: str | None) -> dict:
             elif key == "map_url":
                 cur[key] = _valid_url(value)
             elif key == "active":
+                cur[key] = bool(value)
+            elif key.startswith("show_"):
                 cur[key] = bool(value)
             else:
                 cur[key] = value

@@ -119,13 +119,16 @@ function PageEditor({ pageKey, page, route, onChange, onSave, saving }) {
         <Field label="Subtítulo (opcional)" value={page.subtitle} onChange={(v) => onChange("subtitle", v)} testid={`page-${pageKey}-subtitle`} />
 
         {isContact && (
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="E-mail" value={page.email} onChange={(v) => onChange("email", v)} testid="page-contact-email" />
-            <Field label="Telefone" value={page.phone} onChange={(v) => onChange("phone", v)} testid="page-contact-phone" />
-            <Field label="WhatsApp (URL https)" value={page.whatsapp} onChange={(v) => onChange("whatsapp", v)} testid="page-contact-whatsapp" />
-            <Field label="Horário de atendimento" value={page.hours} onChange={(v) => onChange("hours", v)} testid="page-contact-hours" />
-            <Field label="Endereço comercial (opcional)" value={page.address} onChange={(v) => onChange("address", v)} testid="page-contact-address" />
-            <Field label="Link do mapa (opcional, https)" value={page.map_url} onChange={(v) => onChange("map_url", v)} testid="page-contact-map" />
+          <div className="border border-[#2e2e2e] rounded-lg p-4">
+            <p className="text-xs text-gray-400 mb-3">Marque quais campos de contato aparecem na página. Desmarcar oculta o campo mesmo com valor preenchido.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ContactField label="E-mail" fk="email" sk="show_email" page={page} onChange={onChange} />
+              <ContactField label="Telefone" fk="phone" sk="show_phone" page={page} onChange={onChange} />
+              <ContactField label="WhatsApp (URL https)" fk="whatsapp" sk="show_whatsapp" page={page} onChange={onChange} />
+              <ContactField label="Horário de atendimento" fk="hours" sk="show_hours" page={page} onChange={onChange} />
+              <ContactField label="Endereço comercial" fk="address" sk="show_address" page={page} onChange={onChange} />
+              <ContactField label="Link do mapa (https)" fk="map_url" sk="show_map_url" page={page} onChange={onChange} />
+            </div>
           </div>
         )}
 
@@ -174,6 +177,20 @@ function SocialEditor({ social, onChange, onSave, saving }) {
       <button onClick={onSave} disabled={saving} data-testid="save-social-btn" className="mt-6 bg-[#FFC107] text-[#111] font-bold rounded-full px-6 py-3 flex items-center gap-2">
         <Save size={16} /> {saving ? "Salvando..." : "Salvar alterações"}
       </button>
+    </div>
+  );
+}
+
+function ContactField({ label, fk, sk, page, onChange }) {
+  const shown = page[sk] !== false; // default visível (compat)
+  return (
+    <div className={`rounded-lg border p-3 transition-colors ${shown ? "border-[#2e2e2e]" : "border-[#2e2e2e] opacity-60"}`}>
+      <label className="flex items-center justify-between gap-2 mb-1.5 cursor-pointer">
+        <span className="text-xs font-semibold text-white">{label}</span>
+        <input type="checkbox" checked={shown} onChange={(e) => onChange(sk, e.target.checked)} data-testid={`page-contact-${fk}-show`} className="accent-[#FFC107] h-4 w-4" />
+      </label>
+      <input value={page[fk] || ""} onChange={(e) => onChange(fk, e.target.value)} data-testid={`page-contact-${fk}`} disabled={!shown}
+        className="w-full bg-[#111111] border border-[#2e2e2e] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#1E3A8A] disabled:opacity-50" />
     </div>
   );
 }
