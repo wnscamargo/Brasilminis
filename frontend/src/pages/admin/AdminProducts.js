@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Pencil, Trash2, X, Search, Star, Upload, Link as LinkIcon, ArrowUp, ArrowDown, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
@@ -20,6 +21,7 @@ export default function AdminProducts() {
   const [badgeOptions, setBadgeOptions] = useState([]);
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const load = useCallback(() => api.get("/admin/products").then((r) => setProducts(r.data)), []);
   useEffect(() => {
@@ -28,6 +30,15 @@ export default function AdminProducts() {
     api.get("/brands").then((r) => setBrands(r.data));
     api.get("/admin/badges").then((r) => setBadgeOptions(r.data.filter((b) => b.active)));
   }, [load]);
+
+  // Abre o editor diretamente quando vier de "Ver produtos" (/admin/produtos?edit=<id>)
+  useEffect(() => {
+    const editId = searchParams.get("edit");
+    if (editId && products.length) {
+      const p = products.find((x) => x.id === editId);
+      if (p) { setEditing(p); searchParams.delete("edit"); setSearchParams(searchParams, { replace: true }); }
+    }
+  }, [searchParams, products, setSearchParams]);
 
   const del = async (id) => {
     if (!window.confirm("Remover este produto?")) return;
