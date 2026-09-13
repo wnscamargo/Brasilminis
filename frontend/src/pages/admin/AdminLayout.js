@@ -6,6 +6,7 @@ const NAV = [
   { to: "/admin", l: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/admin/produtos", l: "Produtos", icon: Package },
   { to: "/admin/categorias", l: "Categorias", icon: Tags },
+  { to: "/admin/badges", l: "Badges", icon: Award },
   { to: "/admin/marcas", l: "Marcas", icon: Award },
   { to: "/admin/pedidos", l: "Pedidos", icon: ShoppingBag },
   { to: "/admin/cupons", l: "Cupons", icon: Ticket },

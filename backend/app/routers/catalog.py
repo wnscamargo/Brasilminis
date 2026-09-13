@@ -7,11 +7,43 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_db
 from app.models import Brand, Category, Product
 from app.services import category_service
+from app.services import badge_service
 from app.utils import to_dict
 
 router = APIRouter(prefix="/api", tags=["catalog"])
 
 PUBLIC_EXCLUDE = ("cost_price",)  # custo NUNCA é exposto publicamente
+
+
+@router.get("/badges")
+def list_public_badges(db: Session = Depends(get_db)):
+    """Catálogo de badges ATIVOS (texto + estilo) para o storefront."""
+    return badge_service.list_badges(db, only_active=True)
+
+
+@router.get("/home-categories")
+def home_categories(db: Session = Depends(get_db)):
+    """Cards de Categorias da Home: nós (categoria/subcategoria) ATIVOS com show_on_home,
+    derivados da árvore do Admin, já ordenados, com contagem de produtos ATIVOS."""
+    tree = category_service.build_tree(db, only_active=True)
+    out = []
+    for root in tree:
+        if root.get("show_on_home"):
+            out.append({
+                "id": root["id"], "name": root["name"], "slug": root["slug"],
+                "image": root.get("image") or "", "icon": root.get("icon") or "",
+                "featured": bool(root.get("featured")), "product_count": root.get("product_count", 0),
+                "is_sub": False, "sort_order": root.get("sort_order", 0),
+            })
+        for sub in root.get("children", []):
+            if sub.get("show_on_home"):
+                out.append({
+                    "id": sub["id"], "name": sub["name"], "slug": sub["slug"],
+                    "image": sub.get("image") or "", "icon": sub.get("icon") or "",
+                    "featured": bool(sub.get("featured")), "product_count": sub.get("product_count", 0),
+                    "is_sub": True, "sort_order": sub.get("sort_order", 0),
+                })
+    return out
 
 
 def _category_filter(db: Session, slug: str):

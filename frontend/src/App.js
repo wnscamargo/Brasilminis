@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import { SiteConfigProvider } from "@/context/SiteConfigContext";
 import { CategoriesProvider } from "@/context/CategoriesContext";
+import { BadgesProvider } from "@/context/BadgesContext";
 import { CartProvider } from "@/context/CartContext";
 import { FavoritesProvider } from "@/context/FavoritesContext";
 import { ProtectedRoute, ScrollToTop } from "@/components/Guards";
@@ -41,6 +42,7 @@ import AdminMercadoPago from "@/pages/admin/AdminMercadoPago";
 import AdminIntegracoes from "@/pages/admin/AdminIntegracoes";
 import AdminContent from "@/pages/admin/AdminContent";
 import AdminCoupons from "@/pages/admin/AdminCoupons";
+import AdminBadges from "@/pages/admin/AdminBadges";
 
 const Shell = ({ children }) => <Layout>{children}</Layout>;
 
@@ -51,6 +53,7 @@ function App() {
         <AuthProvider>
           <SiteConfigProvider>
           <CategoriesProvider>
+          <BadgesProvider>
           <CartProvider>
             <FavoritesProvider>
               <ScrollToTop />
@@ -85,6 +88,7 @@ function App() {
                   <Route index element={<Dashboard />} />
                   <Route path="produtos" element={<AdminProducts />} />
                   <Route path="categorias" element={<AdminCategories />} />
+                  <Route path="badges" element={<AdminBadges />} />
                   <Route path="marcas" element={<AdminBrands />} />
                   <Route path="pedidos" element={<AdminOrders />} />
                   <Route path="cupons" element={<AdminCoupons />} />
@@ -101,6 +105,7 @@ function App() {
               </MaintenanceGate>
             </FavoritesProvider>
           </CartProvider>
+          </BadgesProvider>
           </CategoriesProvider>
           </SiteConfigProvider>
         </AuthProvider>

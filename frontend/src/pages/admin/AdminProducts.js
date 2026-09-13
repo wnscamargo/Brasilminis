@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
 import { formatBRL } from "@/lib/brand";
 
-const BADGES = ["NOVO", "LANÇAMENTO", "PROMOÇÃO", "TREASURE HUNT", "SUPER TH", "PREMIUM", "EDIÇÃO LIMITADA", "PRÉ-VENDA", "FRETE GRÁTIS"];
 const EMPTY = { name: "", description: "", price: "", compare_at_price: "", cost_price: "", main_category_id: "", subcategory_id: "", brand: "", images: "", stock: 0, weight_kg: "", width_cm: "", height_cm: "", length_cm: "", sku: "", barcode: "", badges: [], featured: false, is_active: true, specs: {} };
 
 function margin(price, cost) {
@@ -18,6 +17,7 @@ export default function AdminProducts() {
   const [products, setProducts] = useState([]);
   const [tree, setTree] = useState([]);
   const [brands, setBrands] = useState([]);
+  const [badgeOptions, setBadgeOptions] = useState([]);
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState(null);
 
@@ -26,6 +26,7 @@ export default function AdminProducts() {
     load();
     api.get("/admin/categories/tree").then((r) => setTree(r.data));
     api.get("/brands").then((r) => setBrands(r.data));
+    api.get("/admin/badges").then((r) => setBadgeOptions(r.data.filter((b) => b.active)));
   }, [load]);
 
   const del = async (id) => {
@@ -95,13 +96,13 @@ export default function AdminProducts() {
       </div>
 
       {editing && (
-        <ProductModal data={editing} tree={tree} brands={brands} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
+        <ProductModal data={editing} tree={tree} brands={brands} badgeOptions={badgeOptions} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
       )}
     </div>
   );
 }
 
-function ProductModal({ data, tree, brands, onClose, onSaved }) {
+function ProductModal({ data, tree, brands, badgeOptions = [], onClose, onSaved }) {
   const [form, setForm] = useState(data);
   const [specText, setSpecText] = useState(Object.entries(data.specs || {}).map(([k, v]) => `${k}: ${v}`).join("\n"));
   const [saving, setSaving] = useState(false);
@@ -208,8 +209,11 @@ function ProductModal({ data, tree, brands, onClose, onSaved }) {
         <div className="mt-4">
           <label className="text-xs text-gray-500 block mb-2">Badges</label>
           <div className="flex flex-wrap gap-2">
-            {BADGES.map((b) => (
-              <button type="button" key={b} onClick={() => toggleBadge(b)} className={`px-3 py-1 rounded-full text-xs font-semibold border ${form.badges.includes(b) ? "bg-[#1E3A8A] border-[#1E3A8A] text-white" : "border-[#2e2e2e] text-gray-400"}`}>{b}</button>
+            {badgeOptions.length === 0 && <span className="text-xs text-gray-600">Nenhum badge cadastrado. Crie em Catálogo → Badges.</span>}
+            {badgeOptions.map((bo) => (
+              <button type="button" key={bo.id} onClick={() => toggleBadge(bo.text)} data-testid={`pf-badge-${bo.text}`}
+                style={form.badges.includes(bo.text) ? { backgroundColor: bo.bg_color, color: bo.text_color, borderColor: bo.bg_color } : {}}
+                className={`px-3 py-1 rounded-full text-xs font-semibold border ${form.badges.includes(bo.text) ? "" : "border-[#2e2e2e] text-gray-400"}`}>{bo.text}</button>
             ))}
           </div>
         </div>

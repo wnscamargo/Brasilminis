@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, Flame, Sparkles, Tag } from "lucide-react";
 import api from "@/lib/api";
-import { GROUP_LABELS } from "@/lib/brand";
 import ProductCard from "@/components/ProductCard";
 import TrustIcons from "@/components/TrustIcons";
 
@@ -16,22 +15,25 @@ export default function Home() {
   const [launches, setLaunches] = useState([]);
   const [sale, setSale] = useState([]);
   const [brands, setBrands] = useState([]);
+  const [homeCats, setHomeCats] = useState([]);
 
   useEffect(() => {
     (async () => {
       try {
-        const [b, f, l, s, br] = await Promise.all([
+        const [b, f, l, s, br, hc] = await Promise.all([
           api.get("/banners"),
           api.get("/products?featured=true&limit=8"),
           api.get("/products?badge=LANÇAMENTO&limit=4"),
           api.get("/products?on_sale=true&limit=4"),
           api.get("/brands"),
+          api.get("/home-categories"),
         ]);
         setBanner(b.data[0]);
         setFeatured(f.data.items);
         setLaunches(l.data.items);
         setSale(s.data.items);
         setBrands(br.data);
+        setHomeCats(hc.data || []);
       } catch {}
     })();
   }, []);
@@ -81,34 +83,37 @@ export default function Home() {
 
       <TrustIcons />
 
-      {/* Categories groups */}
+      {/* Categories groups (dinâmico do Admin) */}
+      {homeCats.length > 0 && (
       <section className="max-w-[1400px] mx-auto px-4 lg:px-8 py-20">
         <SectionTitle icon={Sparkles} kicker="Explore" title="Categorias" />
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-8">
-          {Object.entries(GROUP_LABELS).map(([slug, label], i) => (
+          {homeCats.map((c, i) => (
             <motion.div
-              key={slug}
+              key={c.id}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.05 }}
             >
               <Link
-                to={`/grupo/${slug}`}
-                data-testid={`group-card-${slug}`}
-                className="group block bm-card p-6 h-32 flex flex-col justify-between hover:border-[#FFC107] transition-colors"
+                to={`/produtos?category=${c.slug}`}
+                data-testid={`group-card-${c.slug}`}
+                className={`group block bm-card p-6 h-32 flex flex-col justify-between hover:border-[#FFC107] transition-colors ${c.featured ? "ring-1 ring-[#FFC107]/40" : ""}`}
               >
                 <span className="text-3xl font-display font-black text-[#2e2e2e] group-hover:text-[#1E3A8A] transition-colors">
-                  0{i + 1}
+                  {String(i + 1).padStart(2, "0")}
                 </span>
                 <span className="text-sm font-semibold uppercase tracking-wide text-white">
-                  {label}
+                  {c.name}
+                  <span className="block text-[11px] text-gray-500 normal-case font-normal mt-0.5" data-testid={`group-count-${c.slug}`}>{c.product_count} produto(s)</span>
                 </span>
               </Link>
             </motion.div>
           ))}
         </div>
       </section>
+      )}
 
       {/* Featured / Mais vendidos */}
       <section className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-8">

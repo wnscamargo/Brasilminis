@@ -4,11 +4,13 @@ import { motion } from "framer-motion";
 import { Heart, ShoppingCart, Star, Truck, ShieldCheck, Minus, Plus, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
-import { badgeClass, formatBRL } from "@/lib/brand";
+import { formatBRL } from "@/lib/brand";
 import { useCart } from "@/context/CartContext";
 import { useFavorites } from "@/context/FavoritesContext";
 import { useAuth } from "@/context/AuthContext";
+import { useBadges } from "@/context/BadgesContext";
 import ProductCard from "@/components/ProductCard";
+import Lightbox from "@/components/Lightbox";
 
 export default function ProductDetail() {
   const { slug } = useParams();
@@ -19,10 +21,12 @@ export default function ProductDetail() {
   const [qty, setQty] = useState(1);
   const [tab, setTab] = useState("desc");
   const [rForm, setRForm] = useState({ rating: 5, comment: "" });
+  const [lightbox, setLightbox] = useState(false);
 
   const { addItem } = useCart();
   const { ids, toggle } = useFavorites();
   const { user } = useAuth();
+  const { styleFor } = useBadges();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -91,35 +95,44 @@ export default function ProductDetail() {
       <div className="grid lg:grid-cols-2 gap-10">
         {/* gallery */}
         <div>
-          <motion.div
+          <motion.button
+            type="button"
             key={activeImg}
             initial={{ opacity: 0.4 }}
             animate={{ opacity: 1 }}
-            className="bm-card overflow-hidden aspect-square group"
+            onClick={() => setLightbox(true)}
+            aria-label="Ampliar imagem"
+            className="bm-card overflow-hidden aspect-square group block w-full cursor-zoom-in"
           >
             <img
               src={product.images?.[activeImg]}
               alt={product.name}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110 cursor-zoom-in"
+              loading="lazy"
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
               data-testid="product-main-image"
             />
-          </motion.div>
+          </motion.button>
           {product.images?.length > 1 && (
-            <div className="flex gap-3 mt-3">
+            <div className="flex gap-3 mt-3 flex-wrap">
               {product.images.map((img, i) => (
                 <button
                   key={i}
                   onClick={() => setActiveImg(i)}
+                  data-testid={`product-thumb-${i}`}
+                  aria-label={`Ver imagem ${i + 1}`}
                   className={`h-20 w-20 rounded-lg overflow-hidden border-2 transition-colors ${
                     activeImg === i ? "border-[#FFC107]" : "border-[#2e2e2e]"
                   }`}
                 >
-                  <img src={img} alt="" className="h-full w-full object-cover" />
+                  <img src={img} alt="" loading="lazy" className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>
           )}
         </div>
+        {lightbox && (
+          <Lightbox images={product.images || []} index={activeImg} onIndex={setActiveImg} onClose={() => setLightbox(false)} />
+        )}
 
         {/* info */}
         <div>
@@ -134,7 +147,7 @@ export default function ProductDetail() {
 
           <div className="flex flex-wrap items-center gap-2 mt-4">
             {(product.badges || []).map((b) => (
-              <span key={b} className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full ${badgeClass(b)}`}>
+              <span key={b} style={styleFor(b)} className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full">
                 {b}
               </span>
             ))}

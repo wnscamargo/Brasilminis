@@ -1,13 +1,15 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Heart, Star } from "lucide-react";
-import { badgeClass, formatBRL } from "@/lib/brand";
+import { formatBRL } from "@/lib/brand";
 import { useCart } from "@/context/CartContext";
 import { useFavorites } from "@/context/FavoritesContext";
+import { useBadges } from "@/context/BadgesContext";
 
 export default function ProductCard({ product, index = 0 }) {
   const { addItem } = useCart();
   const { ids, toggle } = useFavorites();
+  const { styleFor } = useBadges();
   const isFav = ids.includes(product.id);
   const discount =
     product.compare_at_price && product.compare_at_price > product.price
@@ -37,7 +39,8 @@ export default function ProductCard({ product, index = 0 }) {
           {(product.badges || []).slice(0, 2).map((b) => (
             <span
               key={b}
-              className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full ${badgeClass(b)}`}
+              style={styleFor(b)}
+              className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full"
             >
               {b}
             </span>

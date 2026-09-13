@@ -16,6 +16,7 @@ from app.models import (
     User,
 )
 from app.schemas import (
+    BadgeInput,
     BannerInput,
     BrandInput,
     CategoryInput,
@@ -32,6 +33,7 @@ from app.schemas import (
     ProfileInput,
 )
 from app.services import analytics_service, category_service
+from app.services import badge_service
 from app.services import coupon_service
 from app.services import customer_admin_service
 from app.services import dashboard_service
@@ -276,6 +278,70 @@ def update_category(category_id: str, payload: CategoryInput, admin: dict = Depe
 @router.delete("/categories/{category_id}")
 def delete_category(category_id: str, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
     return category_service.delete_category(db, category_id)
+
+
+# ---------------- Badges (catálogo administrável) ----------------
+@router.get("/badges")
+def admin_list_badges(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return badge_service.list_badges(db)
+
+
+@router.post("/badges")
+def admin_create_badge(payload: BadgeInput, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return badge_service.create_badge(db, payload.model_dump())
+
+
+@router.put("/badges/{badge_id}")
+def admin_update_badge(badge_id: str, payload: BadgeInput, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return badge_service.update_badge(db, badge_id, payload.model_dump())
+
+
+@router.delete("/badges/{badge_id}")
+def admin_delete_badge(badge_id: str, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return badge_service.delete_badge(db, badge_id)
+
+
+# ---------------- Produtos por categoria/subcategoria (Ver produtos) ----------------
+@router.get("/catalog/products")
+def admin_products_by_category(
+    category: str | None = None,   # slug de categoria/subcategoria
+    search: str | None = None,
+    active: str | None = None,     # "true" | "false" | None(todos)
+    stock: str | None = None,      # "in" | "out" | None
+    sort: str = "recent",
+    page: int = 1,
+    limit: int = 20,
+    admin: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    from sqlalchemy import or_
+    from app.routers.catalog import _category_filter
+    q = db.query(Product)
+    if category:
+        q = q.filter(_category_filter(db, category))
+    if active == "true":
+        q = q.filter(Product.is_active.is_(True))
+    elif active == "false":
+        q = q.filter(Product.is_active.is_(False))
+    if stock == "in":
+        q = q.filter(Product.stock > 0)
+    elif stock == "out":
+        q = q.filter(Product.stock <= 0)
+    if search:
+        like = f"%{search}%"
+        q = q.filter(or_(Product.name.ilike(like), Product.sku.ilike(like), Product.slug.ilike(like)))
+    sort_map = {
+        "recent": Product.created_at.desc(),
+        "name": Product.name.asc(),
+        "price_asc": Product.price.asc(),
+        "price_desc": Product.price.desc(),
+        "stock_asc": Product.stock.asc(),
+        "stock_desc": Product.stock.desc(),
+    }
+    order_by = sort_map.get(sort, Product.created_at.desc())
+    total = q.count()
+    items = q.order_by(order_by).offset((page - 1) * limit).limit(limit).all()
+    return {"total": total, "page": page, "limit": limit, "items": [to_dict(p) for p in items]}
 
 
 # ---------------- Brands ----------------
