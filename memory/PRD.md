@@ -385,3 +385,27 @@ O pod não tem remoto; criar/baserar branch em `python-vps` é feito via "Save t
 - `/api/admin/stats` e `/api/admin/analytics` respeitam o baseline (custom = histórico).
 
 ### Testes: backend 18/18 (novo) e suíte completa 182/182; frontend E2E 100% (iteration_12). Alembic head único `d4e5f6a7b8c9`. NENHUM deploy.
+
+---
+
+## Catálogo/Categorias/Badges/Galeria (13/Jun/2026)
+
+### Entregue
+- **Home dinâmica**: cards de Categorias vêm de `GET /api/home-categories` (árvore do Admin). Sem hardcode. Numeração automática 01,02.. pela ordem; contagem de produtos ATIVOS por nó. Nós aparecem só com `is_active=true` E `show_on_home=true`. Card → `/produtos?category=<slug>`.
+- **Categoria**: campos novos `icon`, `show_on_home`, `featured` (categoria e subcategoria) no modal do Admin. `build_tree` agora conta apenas produtos ATIVOS (subcategoria = seus produtos; raiz = próprios + filhos, sem duplicar).
+- **Badges administráveis**: tabela `badges` (texto, bg_color, text_color, icon, priority, sort_order, active). Admin → Badges (CRUD + preview). Exclusão bloqueada se em uso (desativar disponível). Associação ao produto mantida em `Product.badges` (JSONB). Produto: seleção múltipla a partir do catálogo. Storefront estiliza via `BadgesContext`/`GET /api/badges` (fallback padrão).
+- **Ver produtos (Admin)**: `GET /api/admin/catalog/products?category&search&active&stock&sort&page&limit` + modal na árvore de categorias (busca/filtro/ordenação/paginação).
+- **Galeria avançada**: `components/Lightbox.js` — zoom (+/-/roda/duplo clique/0 reset), arrastar quando ampliado, ← → trocar, Esc fechar, miniaturas, contador (oculto com 1 imagem), swipe mobile, foco no diálogo + restauração, aria-labels, lazy loading. 1 imagem: sem setas/contador, zoom disponível.
+
+### Migration
+- `e5f6a7b8c9d0` (aditiva): categories.icon/show_on_home/featured + tabela badges. Head único. Não-destrutiva.
+
+### Endpoints
+- Público: `GET /api/home-categories`, `GET /api/badges`.
+- Admin: `GET/POST /api/admin/badges`, `PUT/DELETE /api/admin/badges/{id}`, `GET /api/admin/catalog/products`.
+
+### Arquivos
+- Backend: models, schemas, `services/badge_service.py` (novo), `services/category_service.py`, `routers/catalog.py`, `routers/admin.py`, migration.
+- Frontend: `context/BadgesContext.js` (novo), `components/Lightbox.js` (novo), `pages/admin/AdminBadges.js` (novo), `Home.js`, `components/ProductCard.js`, `pages/ProductDetail.js`, `pages/admin/AdminCategories.js`, `pages/admin/AdminProducts.js`, `App.js`, `pages/admin/AdminLayout.js`.
+
+### Testes: backend `test_catalog_badges_home.py` 9/9 + suíte completa 191/191; frontend E2E ~95% (iteration_13), 2 itens de código corrigidos (Lightbox). Build OK. NENHUM deploy.

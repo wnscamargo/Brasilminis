@@ -67,7 +67,26 @@ class Category(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     sort_order = Column(Integer, nullable=False, default=0)
     image = Column(String, default="")
+    icon = Column(String, default="")            # ícone opcional (nome lucide ou emoji)
+    show_on_home = Column(Boolean, nullable=False, default=False)  # aparece nos cards da Home
+    featured = Column(Boolean, nullable=False, default=False)      # destaque opcional
     description = Column(Text, default="")
+    created_at = Column(String, default=_now_iso)
+    updated_at = Column(String, nullable=True)
+
+
+class Badge(Base):
+    """Catálogo administrável de badges. A associação ao produto continua em
+    Product.badges (JSONB, lista de textos) — este catálogo define o estilo."""
+    __tablename__ = "badges"
+    id = Column(String, primary_key=True, default=_uuid)
+    text = Column(String, unique=True, nullable=False, index=True)
+    bg_color = Column(String, default="#FFC107")
+    text_color = Column(String, default="#111111")
+    icon = Column(String, default="")
+    priority = Column(Integer, default=0)
+    sort_order = Column(Integer, default=0)
+    active = Column(Boolean, nullable=False, default=True)
     created_at = Column(String, default=_now_iso)
     updated_at = Column(String, nullable=True)
 

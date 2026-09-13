@@ -19,18 +19,16 @@ def _serialize(c: Category) -> dict:
 
 
 def build_tree(db: Session, only_active: bool = False) -> list:
-    """Retorna a árvore de categorias (2 níveis) com contagem de produtos."""
+    """Retorna a árvore de categorias (2 níveis) com contagem de produtos ATIVOS."""
     q = db.query(Category)
     if only_active:
         q = q.filter(Category.is_active.is_(True))
     cats = q.order_by(Category.sort_order.asc(), Category.name.asc()).all()
 
-    # Contagem de produtos por slug de categoria (subcategoria) e por grupo (principal).
-    products = db.query(Product.category, Product.group).all()
-    count_by_slug: dict = {}
-    for cat_slug, grp in products:
-        if cat_slug:
-            count_by_slug[cat_slug] = count_by_slug.get(cat_slug, 0) + 1
+    # Produtos ATIVOS (id + vínculos) para contagem sem duplicação.
+    rows = db.query(
+        Product.id, Product.main_category_id, Product.subcategory_id, Product.group, Product.category
+    ).filter(Product.is_active.is_(True)).all()
 
     by_id = {c.id: c for c in cats}
     roots = []
@@ -41,21 +39,39 @@ def build_tree(db: Session, only_active: bool = False) -> list:
         elif c.parent_id is None:
             roots.append(c)
 
-    def node(c: Category, children: list) -> dict:
+    def _sub_ids(cat: Category) -> set:
+        s = set()
+        for pid, main_id, sub_id, grp, cat_slug in rows:
+            if sub_id == cat.id or (cat_slug and cat_slug == cat.slug):
+                s.add(pid)
+        return s
+
+    def _root_ids(cat: Category, child_slugs: set, child_ids: set) -> set:
+        s = set()
+        for pid, main_id, sub_id, grp, cat_slug in rows:
+            if (
+                main_id == cat.id
+                or (grp and grp == cat.slug)
+                or (cat_slug and cat_slug == cat.slug)
+                or (sub_id in child_ids)
+                or (cat_slug and cat_slug in child_slugs)
+            ):
+                s.add(pid)
+        return s
+
+    def node(c: Category, children: list, count: int) -> dict:
         d = _serialize(c)
-        d["product_count"] = count_by_slug.get(c.slug, 0)
+        d["product_count"] = count
         d["children"] = children
         return d
 
     tree = []
     for root in roots:
-        kids = [
-            node(child, [])
-            for child in sorted(
-                children_map.get(root.id, []), key=lambda x: (x.sort_order, x.name)
-            )
-        ]
-        tree.append(node(root, kids))
+        kids_cats = sorted(children_map.get(root.id, []), key=lambda x: (x.sort_order, x.name))
+        kids = [node(child, [], len(_sub_ids(child))) for child in kids_cats]
+        child_ids = {c.id for c in kids_cats}
+        child_slugs = {c.slug for c in kids_cats}
+        tree.append(node(root, kids, len(_root_ids(root, child_slugs, child_ids))))
     return tree
 
 
@@ -106,6 +122,9 @@ def create_category(db: Session, data: dict) -> dict:
         is_active=data.get("is_active", True),
         sort_order=data.get("sort_order", 0),
         image=data.get("image", ""),
+        icon=data.get("icon", ""),
+        show_on_home=bool(data.get("show_on_home", False)),
+        featured=bool(data.get("featured", False)),
         description=data.get("description", ""),
         created_at=_now(),
         updated_at=_now(),
@@ -136,6 +155,12 @@ def update_category(db: Session, category_id: str, data: dict) -> dict:
         cat.sort_order = data["sort_order"]
     if "image" in data and data["image"] is not None:
         cat.image = data["image"]
+    if "icon" in data and data["icon"] is not None:
+        cat.icon = data["icon"]
+    if "show_on_home" in data and data["show_on_home"] is not None:
+        cat.show_on_home = bool(data["show_on_home"])
+    if "featured" in data and data["featured"] is not None:
+        cat.featured = bool(data["featured"])
     if "description" in data and data["description"] is not None:
         cat.description = data["description"]
     if data.get("group"):

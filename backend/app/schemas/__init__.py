@@ -62,7 +62,20 @@ class CategoryInput(BaseModel):
     is_active: bool = True
     sort_order: int = 0
     image: Optional[str] = ""
+    icon: Optional[str] = ""
+    show_on_home: Optional[bool] = None
+    featured: Optional[bool] = None
     description: Optional[str] = ""
+
+
+class BadgeInput(BaseModel):
+    text: str
+    bg_color: str = "#FFC107"
+    text_color: str = "#111111"
+    icon: Optional[str] = ""
+    priority: int = 0
+    sort_order: int = 0
+    active: bool = True
 
 
 class CategoryReorderInput(BaseModel):
