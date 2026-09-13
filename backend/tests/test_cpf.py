@@ -3,9 +3,10 @@ import os
 import time
 import uuid
 import requests
+from .test_helpers import preserve_auth_cookie, valid_cpf
 import pytest
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
+BASE_URL = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8001").rstrip("/")
 if not BASE_URL:
     # Fall back to reading frontend .env for BASE URL
     try:
@@ -16,8 +17,8 @@ if not BASE_URL:
     except Exception:
         pass
 
-ADMIN_EMAIL = "admin@brasilminis.com"
-ADMIN_PASS = "Admin@2025"
+ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
+ADMIN_PASS = os.environ["ADMIN_PASSWORD"]
 
 VALID_CPFS = ["39053344705", "52998224725", "11144477735"]
 INVALID_CPFS = ["11111111111", "12345678900"]
@@ -32,6 +33,7 @@ def admin_session():
     s = requests.Session()
     r = s.post(f"{BASE_URL}/api/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASS})
     assert r.status_code == 200, f"Admin login failed: {r.status_code} {r.text}"
+    preserve_auth_cookie(s, r)
     return s
 
 
@@ -122,6 +124,7 @@ class TestProfileCpf:
             "cpf": cpf1, "newsletter": False,
         })
         assert r.status_code == 200, r.text
+        preserve_auth_cookie(s, r)
         r2 = s.put(f"{BASE_URL}/api/account/profile", json={"cpf": cpf2})
         assert r2.status_code == 200, r2.text
         assert r2.json().get("cpf") == cpf2
@@ -134,6 +137,7 @@ class TestProfileCpf:
             "cpf": cpf1, "newsletter": False,
         })
         assert r.status_code == 200
+        preserve_auth_cookie(s, r)
         r2 = s.put(f"{BASE_URL}/api/account/profile", json={"cpf": "12345678900"})
         assert r2.status_code == 400
         assert "12345678900" not in r2.json().get("detail", "")
@@ -155,6 +159,7 @@ class TestProfileCpf:
             "cpf": cpf_b, "newsletter": False,
         })
         assert rb.status_code == 200
+        preserve_auth_cookie(sb, rb)
         # B tries to update to A's CPF
         r2 = sb.put(f"{BASE_URL}/api/account/profile", json={"cpf": cpf_a})
         assert r2.status_code == 400
@@ -168,6 +173,7 @@ class TestProfileCpf:
             "cpf": cpf, "newsletter": False,
         })
         assert r.status_code == 200
+        preserve_auth_cookie(s, r)
         # Update to same CPF — should not fail (dup filter excludes self)
         r2 = s.put(f"{BASE_URL}/api/account/profile", json={"cpf": cpf})
         assert r2.status_code == 200, r2.text
@@ -220,6 +226,7 @@ class TestAdminCpf:
             "cpf": _gen_cpf(), "newsletter": False,
         })
         uid = rr.json()["id"]
+        preserve_auth_cookie(s, rr)
         r = s.put(f"{BASE_URL}/api/admin/customers/{uid}", json={"cpf": _gen_cpf()})
         assert r.status_code in (401, 403)
 

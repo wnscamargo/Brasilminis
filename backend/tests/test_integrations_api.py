@@ -11,10 +11,11 @@ import re
 import uuid
 import pytest
 import requests
+from .test_helpers import preserve_auth_cookie, valid_cpf
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/") or "http://localhost:3000"
-ADMIN_EMAIL = "admin@brasilminis.com"
-ADMIN_PASSWORD = "Admin@2025"
+BASE_URL = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8001").rstrip("/")
+ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 
 
 @pytest.fixture(scope="module")
@@ -23,6 +24,7 @@ def admin_session():
     r = s.post(f"{BASE_URL}/api/auth/login",
                json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=20)
     assert r.status_code == 200, f"admin login falhou: {r.status_code} {r.text}"
+    preserve_auth_cookie(s, r)
     yield s
     # cleanup - disconnect MP
     try:
@@ -37,11 +39,16 @@ def customer_session():
     s = requests.Session()
     email = f"TEST_cli_{uuid.uuid4().hex[:8]}@test.com"
     reg = s.post(f"{BASE_URL}/api/auth/register",
-                 json={"name": "Test Client", "email": email, "password": "Teste@123"}, timeout=20)
+                 json={"name": "Test Client", "email": email, "password": "Teste@123", "cpf": valid_cpf()}, timeout=20)
     if reg.status_code not in (200, 201):
         # try login (fallback)
-        s.post(f"{BASE_URL}/api/auth/login",
-               json={"email": email, "password": "Teste@123"}, timeout=15)
+        login = s.post(f"{BASE_URL}/api/auth/login",
+                       json={"email": email, "password": "Teste@123"}, timeout=15)
+        assert login.status_code == 200, f"customer login falhou: {login.status_code} {login.text}"
+        preserve_auth_cookie(s, login)
+    else:
+        preserve_auth_cookie(s, reg)
+
     return s, email
 
 

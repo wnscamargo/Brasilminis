@@ -8,10 +8,11 @@ import os
 import uuid
 import pytest
 import requests
+from .test_helpers import preserve_auth_cookie, valid_cpf
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
-ADMIN_EMAIL = "admin@brasilminis.com"
-ADMIN_PASSWORD = "Admin@2025"
+BASE_URL = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8001").rstrip("/")
+ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 
 
 # ------------- Fixtures -------------
@@ -21,6 +22,7 @@ def admin_session():
     r = s.post(f"{BASE_URL}/api/auth/login",
                json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=30)
     assert r.status_code == 200, r.text
+    preserve_auth_cookie(s, r)
     return s
 
 
@@ -28,9 +30,10 @@ def _new_customer():
     email = f"TEST_{uuid.uuid4().hex[:8]}@example.com"
     s = requests.Session()
     r = s.post(f"{BASE_URL}/api/auth/register", json={
-        "name": "Cliente Cupom", "email": email, "password": "senha123", "newsletter": False,
+        "name": "Cliente Cupom", "email": email, "password": "senha123", "cpf": valid_cpf(), "newsletter": False,
     }, timeout=30)
     assert r.status_code == 200, r.text
+    preserve_auth_cookie(s, r)
     return s, r.json()["id"], email
 
 
@@ -60,10 +63,25 @@ def bm10(admin_session):
 
 @pytest.fixture(scope="module")
 def sample_products():
-    r = requests.get(f"{BASE_URL}/api/products?limit=5", timeout=15)
+    """Produtos ativos com estoque suficiente para cenários de cupom.
+
+    Não depende da ordenação do catálogo nem de produtos residuais
+    criados por outras suítes.
+    """
+    r = requests.get(f"{BASE_URL}/api/products?limit=48", timeout=15)
     assert r.status_code == 200
-    items = r.json()["items"]
-    assert items, "Expected seed products"
+
+    items = [
+        item
+        for item in r.json()["items"]
+        if item.get("is_active") and int(item.get("stock") or 0) >= 10
+    ]
+
+    assert len(items) >= 2, (
+        "Expected at least 2 active products with stock >= 10 "
+        "for coupon tests"
+    )
+
     return items
 
 
@@ -396,10 +414,10 @@ class TestDeleteOrderMPBlock:
 
         # Update DB via sqlalchemy directly using the app's engine
         import sys
-        sys.path.insert(0, "/app/backend")
+        sys.path.insert(0, "/var/www/brasilminis/backend")
         # Load backend .env so DATABASE_URL is available in this process
         from dotenv import load_dotenv
-        load_dotenv("/app/backend/.env")
+        load_dotenv("/var/www/brasilminis/backend/.env", override=False)
         from app.db.session import SessionLocal
         from app.models import Order
         db = SessionLocal()

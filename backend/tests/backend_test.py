@@ -9,10 +9,11 @@ import concurrent.futures
 
 import pytest
 import requests
+from .test_helpers import preserve_auth_cookie, valid_cpf
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://vroom-preview.preview.emergentagent.com").rstrip("/")
-ADMIN_EMAIL = "admin@brasilminis.com"
-ADMIN_PASSWORD = "Admin@2025"
+BASE_URL = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8001").rstrip("/")
+ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 
 
 # ---------- Fixtures ----------
@@ -21,6 +22,7 @@ def admin_session():
     s = requests.Session()
     r = s.post(f"{BASE_URL}/api/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=30)
     assert r.status_code == 200, f"Admin login failed: {r.status_code} {r.text}"
+    preserve_auth_cookie(s, r)
     body = r.json()
     assert body["role"] == "admin"
     return s
@@ -32,9 +34,10 @@ def customer_creds():
     password = "senha123"
     s = requests.Session()
     r = s.post(f"{BASE_URL}/api/auth/register", json={
-        "name": "Cliente Teste", "email": email, "password": password, "newsletter": False
+        "name": "Cliente Teste", "email": email, "password": password, "cpf": valid_cpf(), "newsletter": False
     }, timeout=30)
     assert r.status_code == 200, f"Register failed: {r.status_code} {r.text}"
+    preserve_auth_cookie(s, r)
     return {"email": email, "password": password, "id": r.json()["id"], "session": s}
 
 
@@ -262,8 +265,10 @@ class TestOrders:
 
         def _place():
             s = requests.Session()
-            s.post(f"{BASE_URL}/api/auth/login",
+            login = s.post(f"{BASE_URL}/api/auth/login",
                    json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=15)
+            assert login.status_code == 200, login.text
+            preserve_auth_cookie(s, login)
             # admin can also order
             return s.post(f"{BASE_URL}/api/orders", json={
                 "items": [{"product_id": pid, "quantity": 1}],

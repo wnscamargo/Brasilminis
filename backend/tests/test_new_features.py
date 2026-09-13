@@ -14,11 +14,12 @@ import uuid
 
 import pytest
 import requests
+from .test_helpers import preserve_auth_cookie, valid_cpf
 from PIL import Image
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
-ADMIN_EMAIL = "admin@brasilminis.com"
-ADMIN_PASSWORD = "Admin@2025"
+BASE_URL = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8001").rstrip("/")
+ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 
 
 # -------- Fixtures --------
@@ -28,6 +29,7 @@ def admin_session():
     r = s.post(f"{BASE_URL}/api/auth/login",
                json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=30)
     assert r.status_code == 200, r.text
+    preserve_auth_cookie(s, r)
     return s
 
 
@@ -36,9 +38,10 @@ def customer_session():
     email = f"TEST_{uuid.uuid4().hex[:8]}@example.com"
     s = requests.Session()
     r = s.post(f"{BASE_URL}/api/auth/register", json={
-        "name": "Cliente CMV", "email": email, "password": "senha123", "newsletter": False,
+        "name": "Cliente CMV", "email": email, "password": "senha123", "cpf": valid_cpf(), "newsletter": False,
     }, timeout=30)
     assert r.status_code == 200, r.text
+    preserve_auth_cookie(s, r)
     return s
 
 
