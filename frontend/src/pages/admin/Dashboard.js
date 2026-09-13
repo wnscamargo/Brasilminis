@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { DollarSign, ShoppingBag, TrendingUp, Percent, Receipt, Package, AlertTriangle, Truck } from "lucide-react";
+import { DollarSign, ShoppingBag, TrendingUp, Percent, Receipt, Package, AlertTriangle, Truck, RotateCcw, History, X } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import api from "@/lib/api";
+import { toast } from "sonner";
+import api, { formatApiError } from "@/lib/api";
 import { formatBRL } from "@/lib/brand";
 
 const PERIODS = [
@@ -18,6 +19,10 @@ export default function Dashboard() {
   const [range, setRange] = useState({ start: "", end: "" });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [baseline, setBaseline] = useState(null);
+  const [resets, setResets] = useState([]);
+  const [showReset, setShowReset] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const fetchData = () => {
     setLoading(true);
@@ -26,8 +31,10 @@ export default function Dashboard() {
     api.get("/admin/analytics", { params }).then((r) => { setData(r.data); setLoading(false); });
   };
 
+  const fetchBaseline = () => api.get("/admin/dashboard/baseline").then((r) => { setBaseline(r.data.baseline); setResets(r.data.history || []); });
+
   useEffect(() => { if (period !== "custom") fetchData(); /* eslint-disable-next-line */ }, [period]);
-  useEffect(() => { fetchData(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { fetchData(); fetchBaseline(); /* eslint-disable-next-line */ }, []);
 
   const cards = data ? [
     { l: "Faturamento bruto", v: formatBRL(data.revenue_gross), icon: DollarSign, color: "#009B3A", testid: "kpi-revenue" },
@@ -58,6 +65,26 @@ export default function Dashboard() {
           <button onClick={fetchData} data-testid="apply-custom" className="bg-[#1E3A8A] text-white rounded-lg px-5 py-2 text-sm font-semibold">Aplicar</button>
         </div>
       )}
+
+      {/* Controle dos indicadores */}
+      <div className="bm-card p-4 mb-6" data-testid="dashboard-controls">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-display font-bold text-white uppercase text-sm flex items-center gap-2"><History size={16} className="text-[#FFC107]" /> Controle dos indicadores</h3>
+            {baseline ? (
+              <p className="text-xs text-gray-400 mt-1" data-testid="dashboard-baseline-label">Indicadores contando a partir de <b className="text-gray-200">{new Date(baseline).toLocaleString("pt-BR")}</b>. O histórico anterior permanece no banco (use o período Personalizado).</p>
+            ) : (
+              <p className="text-xs text-gray-500 mt-1" data-testid="dashboard-baseline-label">Nenhuma zeragem aplicada — indicadores consideram todo o histórico.</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {resets.length > 0 && (
+              <button onClick={() => setShowHistory(true)} data-testid="dashboard-history-btn" className="text-xs font-semibold rounded-full px-4 py-2 border border-[#2e2e2e] text-gray-300 hover:text-white">Histórico de zeragens ({resets.length})</button>
+            )}
+            <button onClick={() => setShowReset(true)} data-testid="dashboard-reset-btn" className="text-xs font-bold rounded-full px-4 py-2 border border-[#FFC107] text-[#FFC107] hover:bg-[#FFC107]/10 inline-flex items-center gap-1.5"><RotateCcw size={14} /> Zerar Dashboard</button>
+          </div>
+        </div>
+      </div>
 
       {loading || !data ? (
         <div className="text-gray-400">Carregando...</div>
@@ -123,6 +150,72 @@ export default function Dashboard() {
           </div>
         </>
       )}
+
+      {showReset && <ResetModal onClose={() => setShowReset(false)} onDone={() => { setShowReset(false); fetchBaseline(); fetchData(); }} />}
+      {showHistory && <HistoryModal resets={resets} onClose={() => setShowHistory(false)} />}
+    </div>
+  );
+}
+
+function ResetModal({ onClose, onDone }) {
+  const [reason, setReason] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const canReset = reason.trim().length > 0 && confirm === "ZERAR DASHBOARD";
+
+  const doReset = async () => {
+    if (!canReset) return;
+    setBusy(true);
+    try {
+      await api.post("/admin/dashboard/reset", { reason: reason.trim(), confirm });
+      toast.success("Dashboard zerado a partir de agora");
+      onDone();
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/70 grid place-items-center p-4" data-testid="dashboard-reset-modal">
+      <div className="bm-card p-6 max-w-md w-full">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-display font-black uppercase text-white flex items-center gap-2"><AlertTriangle className="text-[#FFC107]" size={20} /> Zerar Dashboard</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={18} /></button>
+        </div>
+        <div className="text-sm text-gray-300 bg-[#111] border border-[#FFC107]/40 rounded-lg p-3 mb-4">
+          Esta ação redefine os indicadores visuais do Dashboard a partir deste momento. Nenhum pedido, pagamento ou histórico será apagado.
+        </div>
+        <label className="text-xs text-gray-500 block mb-1">Motivo da zeragem</label>
+        <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} data-testid="dashboard-reset-reason" className="w-full bg-[#111] border border-[#2e2e2e] rounded-lg px-3 py-2 text-sm text-white mb-3" />
+        <label className="text-xs text-gray-500 block mb-1">Para confirmar, digite <b className="text-[#FFC107]">ZERAR DASHBOARD</b></label>
+        <input value={confirm} onChange={(e) => setConfirm(e.target.value)} data-testid="dashboard-reset-confirm-input" className="w-full bg-[#111] border border-[#2e2e2e] rounded-lg px-3 py-2 text-sm text-white mb-4" />
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-white">Cancelar</button>
+          <button onClick={doReset} disabled={!canReset || busy} data-testid="dashboard-reset-confirm-btn" className="bg-[#FFC107] text-[#111] font-bold rounded-full px-5 py-2 text-sm disabled:opacity-40">
+            {busy ? "Zerando..." : "ZERAR DASHBOARD"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HistoryModal({ resets, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/70 grid place-items-center p-4" data-testid="dashboard-history-modal">
+      <div className="bm-card p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-display font-black uppercase text-white flex items-center gap-2"><History size={18} className="text-[#FFC107]" /> Histórico de zeragens</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={18} /></button>
+        </div>
+        <div className="space-y-3">
+          {resets.map((r) => (
+            <div key={r.id} className="bg-[#111] border border-[#2e2e2e] rounded-lg p-3 text-sm" data-testid={`reset-row-${r.id}`}>
+              <div className="flex justify-between text-white"><span className="font-semibold">{new Date(r.created_at).toLocaleString("pt-BR")}</span><span className="text-gray-500 text-xs">{r.admin_email}</span></div>
+              <p className="text-gray-400 mt-1">Motivo: {r.reason}</p>
+              <p className="text-gray-600 text-xs mt-1">Marco: {new Date(r.reset_at).toLocaleString("pt-BR")}{r.previous_reset_at ? ` • anterior: ${new Date(r.previous_reset_at).toLocaleString("pt-BR")}` : ""}</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

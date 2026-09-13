@@ -104,6 +104,10 @@ def login(payload: LoginInput, response: Response, request: Request, db: Session
     if attempt:
         db.delete(attempt)
         db.commit()
+
+    if user.deleted_at:
+        raise HTTPException(status_code=403, detail="Esta conta foi desativada. Entre em contato com o suporte.")
+
     _set_auth_cookies(response, user.id, email)
     return _public_user(user)
 
