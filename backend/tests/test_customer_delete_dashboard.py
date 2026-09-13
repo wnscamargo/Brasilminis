@@ -9,9 +9,11 @@ import random
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
-ADMIN_EMAIL = "admin@brasilminis.com"
-ADMIN_PASSWORD = "Admin@2025"
+from .test_helpers import preserve_auth_cookie
+
+BASE_URL = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8001").rstrip("/")
+ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 
 
 def _gen_cpf():
@@ -29,6 +31,7 @@ def admin_session():
     s = requests.Session()
     r = s.post(f"{BASE_URL}/api/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=30)
     assert r.status_code == 200, r.text
+    preserve_auth_cookie(s, r)
     return s
 
 
@@ -40,6 +43,7 @@ def _new_customer():
         "name": "Cliente CD", "email": email, "password": "senha123", "cpf": cpf,
     }, timeout=30)
     assert r.status_code == 200, r.text
+    preserve_auth_cookie(s, r)
     return s, r.json()["id"], email, cpf
 
 
