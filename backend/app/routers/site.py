@@ -2,16 +2,21 @@ from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_admin, get_db
-from app.schemas import SiteConfigInput, SiteSettingsInput
+from app.schemas import SiteConfigInput, SiteContentInput, SiteSettingsInput, SocialLinksInput
 from app.services.site_service import (
     admin_config,
+    admin_content,
+    admin_social,
     delete_logo,
     get_settings,
     public_config,
+    public_content,
     public_status,
     save_logo,
     update_config,
+    update_content,
     update_settings,
+    update_social,
 )
 from app.utils import to_dict
 
@@ -72,3 +77,39 @@ async def admin_upload_logo(
 @router.delete("/admin/site-config/logo")
 def admin_delete_logo(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
     return delete_logo(db, admin.get("email"))
+
+
+# ---------- Conteúdo institucional (Sobre, Contato, Trocas, Frete) ----------
+@router.get("/site-content")
+def site_content(db: Session = Depends(get_db)):
+    """Público: páginas ativas + redes sociais ativas."""
+    return public_content(db)
+
+
+@router.get("/admin/site-content")
+def admin_get_site_content(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return admin_content(db)
+
+
+@router.put("/admin/site-content")
+def admin_update_site_content(
+    payload: SiteContentInput,
+    admin: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    return update_content(db, payload.model_dump(exclude_unset=True), admin.get("email"))
+
+
+# ---------- Redes sociais ----------
+@router.get("/admin/social-links")
+def admin_get_social(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return admin_social(db)
+
+
+@router.put("/admin/social-links")
+def admin_update_social(
+    payload: SocialLinksInput,
+    admin: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    return update_social(db, payload.model_dump(exclude_unset=True), admin.get("email"))

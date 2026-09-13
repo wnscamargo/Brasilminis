@@ -32,6 +32,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     role = Column(String, nullable=False, default="customer")
     phone = Column(String, default="")
+    cpf = Column(String, unique=True, nullable=True, index=True)  # normalizado (11 dígitos); legado pode ser NULL
     newsletter = Column(Boolean, default=False)
     addresses = Column(JSONB, default=list)
     created_at = Column(String, default=_now_iso)
@@ -143,8 +144,44 @@ class Coupon(Base):
     type = Column(String, nullable=False)  # percent | fixed
     value = Column(Numeric(12, 2), nullable=False)
     min_order = Column(Numeric(12, 2), default=0)
+    max_discount = Column(Numeric(12, 2), nullable=True)   # teto do desconto (opcional)
     active = Column(Boolean, default=True)
     description = Column(String, default="")
+    starts_at = Column(String, nullable=True)              # ISO
+    expires_at = Column(String, nullable=True)             # ISO
+    usage_limit = Column(Integer, nullable=True)           # limite total de usos
+    per_user_limit = Column(Integer, nullable=True)        # limite por cliente
+    used_count = Column(Integer, default=0)
+    first_purchase_only = Column(Boolean, default=False)
+    free_shipping = Column(Boolean, default=False)
+    allow_stacking = Column(Boolean, default=False)        # cumulativo (padrão: não)
+    scope_type = Column(String, default="all")             # all | categories | products
+    scope_category_ids = Column(JSONB, default=list)
+    scope_product_ids = Column(JSONB, default=list)
+    created_at = Column(String, default=_now_iso)
+    updated_at = Column(String, nullable=True)
+
+
+class CouponRedemption(Base):
+    """Registro de uso de cupom (limite total e por cliente)."""
+    __tablename__ = "coupon_redemptions"
+    id = Column(String, primary_key=True, default=_uuid)
+    coupon_code = Column(String, index=True, nullable=False)
+    user_id = Column(String, index=True, nullable=True)
+    order_id = Column(String, index=True, nullable=True)
+    created_at = Column(String, default=_now_iso)
+
+
+class AdminAuditLog(Base):
+    """Auditoria de ações administrativas (sem segredos)."""
+    __tablename__ = "admin_audit_logs"
+    id = Column(String, primary_key=True, default=_uuid)
+    event = Column(String, nullable=False, index=True)  # ORDER_DELETED, ORDER_DELETE_BLOCKED, ...
+    order_id = Column(String, nullable=True, index=True)
+    admin_id = Column(String, nullable=True)
+    admin_email = Column(String, nullable=True)
+    detail = Column(JSONB, nullable=True)
+    created_at = Column(String, default=_now_iso, index=True)
 
 
 class Order(Base):
@@ -173,6 +210,7 @@ class Order(Base):
     shipping_destination_postal_code = Column(String, nullable=True)
     shipping_quote_snapshot = Column(JSONB, nullable=True)
     recipient_snapshot = Column(JSONB, nullable=True)
+    coupon_snapshot = Column(JSONB, nullable=True)   # congela {code, type, value, discount, free_shipping}
     total = Column(Numeric(12, 2))
     payment_method = Column(String)
     payment_status = Column(String)
@@ -189,6 +227,11 @@ class Order(Base):
     status = Column(String, index=True)
     address = Column(JSONB, nullable=True)
     created_at = Column(String, default=_now_iso, index=True)
+    # Soft delete (exclusão protegida no Admin)
+    deleted_at = Column(String, nullable=True, index=True)
+    deleted_by = Column(String, nullable=True)
+    delete_reason = Column(String, nullable=True)
+    stock_returned = Column(Boolean, default=False)
 
 
 class Banner(Base):
@@ -236,6 +279,8 @@ class SiteSettings(Base):
     logo_url = Column(String, nullable=True)       # None => usa a logo padrão (fallback)
     logo_width = Column(Integer, default=200)       # largura máx. no desktop (px)
     branding = Column(JSONB, default=dict)          # extensível: favicon, cores, og, etc.
+    institutional_content = Column(JSONB, default=dict)  # páginas institucionais (Sobre, Contato, Trocas, Frete)
+    social_links = Column(JSONB, default=dict)      # redes sociais {plataforma: {url, active}}
     updated_at = Column(String, nullable=True)
     updated_by = Column(String, nullable=True)
 

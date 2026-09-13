@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Instagram, Facebook, Youtube, MessageCircle, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import { toast } from "sonner";
 import BrandLogo from "@/components/BrandLogo";
+import SocialLinks from "@/components/SocialLinks";
+import { useSiteConfig } from "@/context/SiteConfigContext";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
+  const { social_links } = useSiteConfig();
 
   const subscribe = (e) => {
     e.preventDefault();
@@ -50,35 +53,28 @@ export default function Footer() {
 
       <div className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-12 grid grid-cols-2 md:grid-cols-4 gap-8">
         <div className="col-span-2 md:col-span-1">
-          <BrandLogo variant="footer" className="mb-4" />
+          <div className="mb-4 inline-flex items-start" data-testid="footer-brand">
+            <BrandLogo variant="footer" />
+            <sup className="text-gray-400 text-[10px] ml-0.5 mt-0.5">®</sup>
+          </div>
           <p className="text-sm text-gray-500 leading-relaxed">
             Sua paixão em miniatura. As melhores marcas e edições exclusivas do universo automotivo.
           </p>
         </div>
-        <FooterCol title="Institucional" links={[["Sobre nós", "/contato"], ["Marcas", "/marcas"], ["Lançamentos", "/produtos?badge=LANÇAMENTO"], ["Promoções", "/produtos?on_sale=true"]]} />
-        <FooterCol title="Ajuda" links={[["Contato", "/contato"], ["Trocas e devoluções", "/contato"], ["Frete e entrega", "/contato"], ["Minha conta", "/conta"]]} />
+        <FooterCol title="Institucional" links={[["Sobre nós", "/sobre"], ["Marcas", "/marcas"], ["Lançamentos", "/produtos?badge=LANÇAMENTO"], ["Promoções", "/produtos?on_sale=true"]]} />
+        <FooterCol title="Ajuda" links={[["Contato", "/contato"], ["Trocas e devoluções", "/trocas-devolucoes"], ["Frete e entrega", "/frete-entrega"], ["Minha conta", "/conta"]]} />
         <div>
           <h4 className="font-display font-semibold text-white uppercase text-sm tracking-wider mb-4">
             Redes Sociais
           </h4>
-          <div className="flex gap-3">
-            {[Instagram, Facebook, Youtube, MessageCircle].map((Icon, i) => (
-              <a
-                key={i}
-                href="#"
-                className="h-10 w-10 grid place-items-center rounded-full border border-[#2e2e2e] text-gray-300 hover:border-[#FFC107] hover:text-[#FFC107] transition-colors"
-              >
-                <Icon size={18} />
-              </a>
-            ))}
-          </div>
+          <SocialLinks social={social_links || {}} />
           <p className="text-xs text-gray-600 mt-6">Pagamento seguro • PIX • Cartão • Boleto</p>
         </div>
       </div>
 
       <div className="border-t border-[#2e2e2e] py-5">
         <p className="text-center text-xs text-gray-600">
-          © {new Date().getFullYear()} Brasil Minis. Todos os direitos reservados.
+          © {new Date().getFullYear()} Brasil Minis<sup className="text-[8px]">®</sup>. Todos os direitos reservados.
         </p>
       </div>
     </footer>

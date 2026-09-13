@@ -11,6 +11,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.core.cpf import is_valid_cpf, normalize_cpf
 from app.dependencies import _public_user, get_current_user, get_db
 from app.models import LoginAttempt, PasswordResetToken, User
 from app.schemas import ForgotPasswordInput, LoginInput, RegisterInput, ResetPasswordInput
@@ -44,12 +45,18 @@ def register(payload: RegisterInput, response: Response, db: Session = Depends(g
     email = payload.email.lower().strip()
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(status_code=400, detail="Este e-mail já está cadastrado")
+    cpf = normalize_cpf(payload.cpf)
+    if not is_valid_cpf(cpf):
+        raise HTTPException(status_code=400, detail="CPF inválido. Verifique os números digitados.")
+    if db.query(User).filter(User.cpf == cpf).first():
+        raise HTTPException(status_code=400, detail="Este CPF já está cadastrado.")
     user = User(
         name=payload.name,
         email=email,
         password_hash=hash_password(payload.password),
         role="customer",
         phone="",
+        cpf=cpf,
         newsletter=payload.newsletter,
         addresses=[],
         created_at=datetime.now(timezone.utc).isoformat(),

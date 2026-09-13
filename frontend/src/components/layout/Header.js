@@ -41,8 +41,9 @@ export default function Header() {
               {open ? <X size={26} /> : <Menu size={26} />}
             </button>
 
-            <Link to="/" data-testid="logo-link" className="shrink-0" aria-label="Brasil Minis | Miniaturas Diecast">
+            <Link to="/" data-testid="logo-link" className="shrink-0 inline-flex items-start" aria-label="Brasil Minis® | Miniaturas Diecast">
               <BrandLogo variant="header" />
+              <sup className="text-gray-400 text-[10px] ml-0.5 mt-1 select-none">®</sup>
             </Link>
 
             <form onSubmit={submitSearch} className="hidden md:flex flex-1 max-w-xl mx-4 relative">

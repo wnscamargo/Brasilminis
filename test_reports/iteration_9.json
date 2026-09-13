@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 9 - Testes das 3 melhorias (CEP no cadastro, Páginas institucionais editáveis, Redes sociais configuráveis). BACKEND: 11/11 testes pytest passaram (tests/test_site_content.py): GET /api/site-content shape + páginas ativas + social_links; GET /api/site-config expõe social_links; RBAC 401 em admin/site-content e admin/social-links sem sessão; login admin OK; sanitização remove <script> e <iframe> (bleach com strip=True — texto interno permanece como texto puro, o que é seguro); URLs 'javascript:' e sem http/https retornam 400; página inativa some do público mas continua em admin/site-content; TikTok com URL vazia + active=true é normalizado para active=false (regra do service); GET /api/cep/01310100 devolve Avenida Paulista/Bela Vista/São Paulo/SP; CEP inválido 00000000 retorna 400/404. FRONTEND (viewport 1440x900, preview URL): /sobre, /trocas-devolucoes, /frete-entrega renderizam institutional-<key> com título e artigo Markdown. /contato mostra contact-title + itens contact-item-* somente para campos preenchidos (email/telefone/atendimento/endereço — WhatsApp não aparece porque vazio). SocialLinks no /contato renderiza social-instagram/facebook/youtube/whatsapp (as 4 ativas com URL) e omite tiktok/pinterest. Cadastro (/cadastro): reg-addr-zip com '01310100' preenche automaticamente reg-addr-street='Avenida Paulista', reg-addr-district='Bela Vista', reg-addr-city='São Paulo', reg-addr-state='SP'; reg-addr-number e reg-addr-complement permanecem VAZIOS (correto). CEP '00000000' exibe reg-cep-error 'CEP não encontrado. Preencha manualmente.' e mantém os inputs editáveis (verificado escrevendo 'Rua Manual' após erro). Fonte da verdade: logado como admin, editei /admin/conteudo aba Sobre Nós → alterei título para 'Sobre Nós Iter9 <timestamp>' e conteúdo; salvei em save-content-btn; ao abrir /sobre em nova página o título público refletiu o novo valor sem redeploy. Redes sociais: salvei Instagram URL nova + active; abrindo /contato em nova página, social-instagram aparece com href correto, target='_blank' e rel='noopener noreferrer'. Menu lateral admin possui link 'Conteúdo do Site' → /admin/conteudo. Não foram observados erros no console além de 401s esperados em /auth/me para páginas públicas de usuário anônimo.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/contato", "issues": ["data-testid dos contact items contém acento e barra (ex.: 'contact-item-endereço', 'contact-item-e-mail'). Funcional mas viola convenção kebab-case ASCII usada no resto do app; sugere-se normalizar (endereco, email)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_site_content.py", "/app/test_reports/pytest/iter9_site.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "site_service._sanitize_rich usa bleach.clean(strip=True) que remove a tag <script> mas mantém o texto interno como texto puro. Seguro (não executa), porém pode confundir editores. Considerar strip_comments=True e/ou substituir strip por strip=False + escape para clareza visual.",
+    "site_service.update_content trata 'whatsapp' de contato como URL obrigatória via _valid_url. Se admin colar apenas número (11999999999) sem https://wa.me/, o PUT retorna 400 — pode ser confuso. Considerar aceitar número e montar wa.me automaticamente, ou melhorar mensagem.",
+    "SiteSettings.social_links e institutional_content são JSONB — OK. Porém o service reconstrói dicionários e usa flag_modified — bom. Falta índice/versionamento para auditoria de mudanças (opcional).",
+    "AdminContent.js: SocialEditor não valida no cliente que URL comece com https:// antes de salvar; usuário verá erro genérico do backend. UX melhoraria com validação inline.",
+    "Register.js: se o backend /account/addresses falhar após register, o erro é silenciosamente engolido (try/catch vazio). Usuário chega em /conta sem saber que o endereço não foi salvo. Sugerir toast.warning('Não foi possível salvar o endereço, adicione manualmente em Minha Conta').",
+    "SocialLinks.js: ícone do Pinterest usa 'Pin' do lucide (que é um marcador de mapa) — visualmente confuso. Considerar SVG customizado ou react-icons/si.",
+    "Contact.js: data-testid dinâmico usa label.toLowerCase() e mantém acentos → 'contact-item-endereço', 'contact-item-e-mail' (com hífen antes do 'mail'). Padronizar."
+  ],
+  "updated_files": ["/app/backend/tests/test_site_content.py"],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (institucional + contato + registro CEP + admin→público + redes sociais + sidebar)"},
+  "test_credentials": "admin@brasilminis.com / Admin@2025",
+  "seed_data_creation": "Nenhum seed permanente. Durante os testes o campo 'about.title' foi alterado para 'Sobre Nós Iter9 <timestamp>' e Instagram URL para 'https://instagram.com/brasilminis-iter9' (main agent pode restaurar via /admin/conteudo se desejado).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Os endpoints e RBAC funcionam. Cookies do preview vêm com Partitioned; requests não persiste automaticamente. O helper _admin_session em test_site_content.py extrai access_token do Set-Cookie e força header Cookie — usar mesmo padrão em testes futuros com auth. CEP endpoint retorna campos street/district/city/state (não uf/logradouro). O admin editou o título de 'Sobre Nós' e o Instagram durante o teste; se afetar outra suíte, restaurar via PUT /api/admin/site-content ou pelo painel.",
+  "rca of the issue": "N/A — nenhum bug bloqueante encontrado. Apenas melhorias de UX/consistência listadas em critical_code_review_comments."
+}

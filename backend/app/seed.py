@@ -181,8 +181,8 @@ COUPONS = [
      "description": "10% de desconto acima de R$100"},
     {"code": "MINIS20", "type": "percent", "value": 20, "min_order": 300, "active": True,
      "description": "20% de desconto acima de R$300"},
-    {"code": "FRETEGRATIS", "type": "fixed", "value": 29.9, "min_order": 0, "active": True,
-     "description": "Frete grátis"},
+    {"code": "FRETEGRATIS", "type": "percent", "value": 0, "min_order": 0, "active": True,
+     "free_shipping": True, "description": "Frete grátis"},
 ]
 
 

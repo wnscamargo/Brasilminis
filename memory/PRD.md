@@ -273,3 +273,60 @@ Migration `e4f5a6b7c8d9` (não-destrutiva). Branch alvo: `mercado-pago-gateway`.
 ### Não deployado
 - Trabalho no preview; salvar via "Save to Github" na branch `fix-public-category-tree`.
 
+
+---
+
+## Conteúdo institucional + Redes sociais + CEP no cadastro (Jun/2026) — branch `site-content-and-customer-address`
+
+### Entregue
+- **CEP automático no cadastro** (`Register.js`): seção de endereço opcional com autofill (logradouro/bairro/cidade/UF) via `GET /api/cep/{cep}`; número obrigatório quando há endereço, complemento opcional (nenhum autopreenchido); loading discreto e erro amigável; não bloqueia o cadastro se o CEP falhar (endereço salvo via `POST /account/addresses` após registrar, com aviso se falhar). Mesmo helper `useCepAutofill` (agora com `onStart/onError`) reutilizado no formulário de endereços da conta (`Account.js`), checkout e remetente ME.
+- **Páginas institucionais configuráveis** (Sobre, Contato, Trocas e Devoluções, Frete e Entrega): `site_settings.institutional_content` (JSONB). Cada página: título, subtítulo, conteúdo Markdown sanitizado (bleach — remove script/iframe/js), ativo/inativo, SEO title/description. Contato tem campos estruturados (email, telefone, whatsapp, horário, endereço, mapa). Rotas públicas `/sobre`, `/trocas-devolucoes`, `/frete-entrega`, `/contato` consomem do banco via `useSiteContent` + `MarkdownContent` (react-markdown, sem HTML bruto). Nada hardcoded no React (defaults moram no service).
+- **Redes sociais configuráveis** (`social_links` JSONB): Instagram, Facebook, TikTok, YouTube, WhatsApp, Telegram, X/Twitter, Pinterest — cada uma com URL + ativo. Público (`GET /api/site-content` e `/api/site-config`) expõe só as ativas com URL. Footer e Contato renderizam via `SocialLinks` (target=_blank rel=noopener). WhatsApp aceita URL completa ou número (gera `wa.me/<digitos>`).
+- **Admin** (`AdminContent.js`, rota `/admin/conteudo`, menu "Conteúdo do Site"): abas por página + aba Redes Sociais, toggle ativo, botão "Visualizar página", "Salvar alterações". RBAC: só admin altera (`get_current_admin`); público só leitura.
+- **Endpoints**: `GET /api/site-content` (público), `GET/PUT /api/admin/site-content`, `GET/PUT /api/admin/social-links`. `site-config` agora inclui `social_links`.
+- **Migration** `a1b2c3d4e5f6` (não-destrutiva): adiciona `institutional_content` e `social_links` (JSONB) em `site_settings`.
+
+### Testes (iteration_9) — 100%, sem bugs
+- Backend 11/11 (`tests/test_site_content.py`): shape público, RBAC 401, sanitização XSS, URL javascript/sem-scheme → 400, página inativa some do público, rede vazia normalizada, CEP válido/inválido. Frontend: institucionais + contato (só campos preenchidos) + CEP no cadastro (número/complemento preservados, erro amigável) + Admin→público sem redeploy + redes sociais no footer/contato. Aplicadas melhorias: testids ASCII no Contato, aviso ao falhar endereço no cadastro, WhatsApp por número.
+
+### Não deployado
+- Preview apenas; salvar via "Save to Github" na branch `site-content-and-customer-address`. Migration head: `a1b2c3d4e5f6`. Nova dep backend: `bleach`; frontend: `react-markdown`.
+
+
+---
+
+## Checkout endereço + Cupons de desconto + Exclusão protegida + Brasil Minis® (Jun/2026) — branch `checkout-order-admin-improvements`
+
+### Entregue
+- **Checkout endereço**: carrega endereço cadastrado (default > mais recente) via `/account/addresses`; toggle "Entregar em outro endereço" com form editável + CEP autofill; checkbox "Salvar este endereço na minha conta" (só persiste se marcado — nunca sobrescreve o cadastro). Snapshot final congelado em `order.recipient_snapshot` (Melhor Envio usa o endereço final).
+- **Cupons de desconto** (`Coupon` estendido + `CouponRedemption`): % ou fixo, valor mínimo, desconto máximo, início/expiração, limite total e por cliente, ativo/inativo, primeira compra, frete grátis, escopo all/categorias/produtos, flag cumulativo. Admin CRUD em `/admin/cupons` (código manual ou gerado). Checkout aplica via `POST /api/coupons/preview` (cálculo 100% no servidor), mostra/remove, recalcula total. Pedido congela `coupon_snapshot` e registra uso (`used_count`+redemption) atômico.
+- **Exclusão protegida de pedidos**: soft delete (`deleted_at/deleted_by/delete_reason/stock_returned`); `DELETE /api/admin/orders/{id}` exige `reason` + `confirm=="EXCLUIR"`; bloqueia (409) se MP `approved` ou envio ME comprometido (in_cart/purchased/generated/posted/delivered); devolve estoque exatamente 1x (idempotente); auditoria `AdminAuditLog` (REQUESTED/BLOCKED/DELETED). Admin: filtro Ativos/Excluídos/Todos + modal de confirmação. Cliente não vê pedidos excluídos.
+- **Brasil Minis®**: ® discreto (sup) no Header (logo), Footer (marca + copyright) e títulos; logo original preservada.
+- **Migration** `b2c3d4e5f6a7` (não-destrutiva). Seed FRETEGRATIS corrigido para `free_shipping=True`.
+
+### Testes (iteration_10): backend 20/21 (1 skipped) + frontend 100%
+- `tests/test_coupons_and_delete.py`: preview auth/cálculo, snapshot+used_count, limites (inativo/expirado/usage/per-user/1ª compra), escopo, frete grátis, CRUD RBAC, exclusão (confirm/reason/soft/estoque 1x/idempotência/scope/MP-block 409/RBAC 403). Frontend: endereço, cupom aplicar/remover, modal exclusão gating, ® Header/Footer. Corrigidos: seed FRETEGRATIS + warning React key (AdminOrders).
+- Preservados (regressão OK): páginas institucionais, redes sociais, catálogo/categorias, MP, Melhor Envio, Admin.
+
+### Não deployado — branch `checkout-order-admin-improvements`. Head: `b2c3d4e5f6a7`.
+
+
+---
+
+## CPF no cadastro de cliente (Jun/2026) — mesmo pacote `checkout-order-admin-improvements`
+
+### Entregue
+- **CPF obrigatório no cadastro** (`RegisterInput.cpf`), com máscara `000.000.000-00` no frontend, armazenado **normalizado** (11 dígitos) em `users.cpf` (único, nullable). Validação **matemática** dos dígitos verificadores (`app/core/cpf.py`), rejeita repetidos e formato só por tamanho.
+- **Unicidade** (DB unique + checagem no endpoint) com mensagens amigáveis; **PII-safe** (nunca loga/expõe o CPF nas mensagens).
+- **Legados sem CPF continuam funcionando** (cpf NULL); podem adicionar depois em `/conta` (dica "complete seu cadastro"). `PUT /api/account/profile` aceita cpf com validação/unicidade.
+- **Admin**: coluna CPF em `/admin/clientes` + `PUT /api/admin/customers/{id}` para visualizar/editar (RBAC).
+- **Checkout**: campo CPF/CNPJ do destinatário **pré-preenchido** com o CPF do cadastro; editar/alternar endereço **não** altera o CPF da conta.
+- **Migration** não-destrutiva `c3d4e5f6a7b8` (coluna cpf + índice único).
+- Auth JWT/bcrypt **preservada** (nenhuma mudança em hashing/tokens; playbook do integration_expert seguido).
+
+### Testes (iteration_11): backend 16/16 + frontend 100%, sem bugs
+- `tests/test_cpf.py`: register (válido/inválido/ausente/duplicado com máscara), normalização, PII, profile (legado adiciona depois), admin edit + RBAC, legado sem CPF funcionando. Frontend: máscara no cadastro, `/conta`, `/admin/clientes` (modal), prefill no checkout.
+- Sem regressão no pacote anterior (checkout/cupons/exclusão/®).
+
+### Não deployado — branch `checkout-order-admin-improvements`. Head: `c3d4e5f6a7b8`.
+

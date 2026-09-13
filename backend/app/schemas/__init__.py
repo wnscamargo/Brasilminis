@@ -8,6 +8,7 @@ class RegisterInput(BaseModel):
     name: str
     email: EmailStr
     password: str = Field(min_length=6)
+    cpf: str
     newsletter: bool = False
 
 
@@ -29,6 +30,7 @@ class ResetPasswordInput(BaseModel):
 class ProfileInput(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
+    cpf: Optional[str] = None
     newsletter: Optional[bool] = None
 
 
@@ -203,6 +205,41 @@ class CouponValidateInput(BaseModel):
     code: str
 
 
+class CouponPreviewInput(BaseModel):
+    code: str
+    items: List[OrderItemInput]
+
+
+class CouponInput(BaseModel):
+    code: str
+    type: str = "percent"  # percent | fixed
+    value: float
+    min_order: float = 0
+    max_discount: Optional[float] = None
+    active: bool = True
+    description: Optional[str] = ""
+    starts_at: Optional[str] = None
+    expires_at: Optional[str] = None
+    usage_limit: Optional[int] = None
+    per_user_limit: Optional[int] = None
+    first_purchase_only: bool = False
+    free_shipping: bool = False
+    allow_stacking: bool = False
+    scope_type: str = "all"  # all | categories | products
+    scope_category_ids: List[str] = []
+    scope_product_ids: List[str] = []
+
+
+class CouponGenerateInput(BaseModel):
+    prefix: Optional[str] = "BM"
+    length: int = 8
+
+
+class OrderDeleteInput(BaseModel):
+    reason: str
+    confirm: str  # deve ser exatamente "EXCLUIR"
+
+
 class OrderStatusInput(BaseModel):
     status: str
 
@@ -246,3 +283,44 @@ class SiteSettingsInput(BaseModel):
 class SiteConfigInput(BaseModel):
     logo_width: int = Field(default=200, ge=60, le=500)
     branding: Optional[dict] = None
+
+
+# ---------- Conteúdo institucional (Sobre, Contato, Trocas, Frete) ----------
+class InstitutionalPage(BaseModel):
+    title: Optional[str] = ""
+    subtitle: Optional[str] = ""
+    content: Optional[str] = ""  # Markdown (sanitizado no servidor)
+    active: bool = True
+    seo_title: Optional[str] = ""
+    seo_description: Optional[str] = ""
+    # Campos estruturados (usados sobretudo na página Contato)
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    whatsapp: Optional[str] = None
+    hours: Optional[str] = None
+    address: Optional[str] = None
+    map_url: Optional[str] = None
+
+
+class SiteContentInput(BaseModel):
+    about: Optional[InstitutionalPage] = None
+    contact: Optional[InstitutionalPage] = None
+    returns: Optional[InstitutionalPage] = None
+    shipping: Optional[InstitutionalPage] = None
+
+
+# ---------- Redes sociais ----------
+class SocialLink(BaseModel):
+    url: Optional[str] = ""
+    active: bool = False
+
+
+class SocialLinksInput(BaseModel):
+    instagram: Optional[SocialLink] = None
+    facebook: Optional[SocialLink] = None
+    tiktok: Optional[SocialLink] = None
+    youtube: Optional[SocialLink] = None
+    whatsapp: Optional[SocialLink] = None
+    telegram: Optional[SocialLink] = None
+    twitter: Optional[SocialLink] = None
+    pinterest: Optional[SocialLink] = None
