@@ -361,3 +361,27 @@ O pod não tem remoto; criar/baserar branch em `python-vps` é feito via "Save t
 3. No GitHub: abrir PR `production-improvements-sep2026` → `python-vps`, revisar diff, mergear.
 
 ### NENHUM DEPLOY realizado. NENHUM dado real de produção alterado.
+
+---
+
+## Exclusão protegida de CLIENTES + Zeragem do Dashboard (13/Jun/2026)
+
+### Entregue (backend + frontend + testes)
+- **Exclusão protegida de clientes (soft delete)**: Admin → Clientes com escopos Ativos/Excluídos/Todos. Modal exige motivo + digitar `EXCLUIR`; botão só habilita após confirmação correta. RBAC admin (cliente comum → 403). Idempotente (excluir 2x não duplica). Auditoria `CUSTOMER_DELETE_REQUESTED`/`CUSTOMER_DELETED` (CPF nunca exposto — só `cpf_tail`). Cliente excluído **não loga** (login 403; sessão existente 401). Pedidos/pagamentos/envios/cupons **preservados** (nada apagado fisicamente).
+- **Anonimização LGPD (opcional)**: checkbox no modal — apaga nome/e-mail/CPF/telefone/endereços e **libera e-mail/CPF para novo cadastro**; histórico operacional mantido via snapshots do pedido.
+- **Restauração**: aba Excluídos → "Restaurar" (admin only), auditoria `CUSTOMER_RESTORED`, valida conflito de e-mail/CPF com cliente ativo (409 amigável, sem alterar dados).
+- **Zeragem do Dashboard (baseline)**: Admin → Dashboard → "Controle dos indicadores" → "Zerar Dashboard". Modal exige motivo + digitar `ZERAR DASHBOARD`. **Não apaga nada** — grava marco em `dashboard_resets`. KPIs dos períodos padrão passam a contar só após o marco (cards iniciam em zero); período **Personalizado** ainda acessa histórico. Auditoria `DASHBOARD_RESET_REQUESTED`/`DASHBOARD_RESET_COMPLETED` (baseline anterior + novo). **Histórico de zeragens** listado (não apagável pela UI).
+
+### Arquivos
+- Backend: `services/customer_admin_service.py` (novo), `services/dashboard_service.py` (novo), `routers/admin.py`, `routers/auth.py`, `dependencies/__init__.py`, `services/analytics_service.py`, `models/__init__.py` (User soft-delete + `DashboardReset`), `schemas/__init__.py`.
+- Frontend: `pages/admin/AdminCustomers.js`, `pages/admin/Dashboard.js`.
+- Migration: `d4e5f6a7b8c9_customer_soft_delete_dashboard.py` (não-destrutiva) — down_revision `c3d4e5f6a7b8`.
+
+### Endpoints
+- `GET /api/admin/customers?scope=active|deleted|all`
+- `DELETE /api/admin/customers/{id}` body `{reason, confirm:"EXCLUIR", anonymize?}`
+- `POST /api/admin/customers/{id}/restore`
+- `GET /api/admin/dashboard/baseline` · `POST /api/admin/dashboard/reset` body `{reason, confirm:"ZERAR DASHBOARD"}`
+- `/api/admin/stats` e `/api/admin/analytics` respeitam o baseline (custom = histórico).
+
+### Testes: backend 18/18 (novo) e suíte completa 182/182; frontend E2E 100% (iteration_12). Alembic head único `d4e5f6a7b8c9`. NENHUM deploy.

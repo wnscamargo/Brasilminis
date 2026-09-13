@@ -47,6 +47,8 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> dict:
         user = db.get(User, payload["sub"])
         if not user:
             raise HTTPException(status_code=401, detail="Usuário não encontrado")
+        if user.deleted_at:
+            raise HTTPException(status_code=401, detail="Conta desativada")
         return _public_user(user)
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Sessão expirada")
