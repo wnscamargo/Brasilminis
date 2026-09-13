@@ -88,7 +88,7 @@ export default function Home() {
       <section className="max-w-[1400px] mx-auto px-4 lg:px-8 py-20">
         <SectionTitle icon={Sparkles} kicker="Explore" title="Categorias" />
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-8">
-          {homeCats.map((c, i) => (
+          {homeCats.slice(0, 5).map((c, i) => (
             <motion.div
               key={c.id}
               initial={{ opacity: 0, y: 20 }}
