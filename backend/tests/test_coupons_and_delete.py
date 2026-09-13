@@ -412,15 +412,33 @@ class TestDeleteOrderMPBlock:
         assert r.status_code == 200
         oid = r.json()["id"]
 
-        # Update DB via sqlalchemy directly using the app's engine
-        import sys
-        sys.path.insert(0, "/var/www/brasilminis/backend")
-        # Load backend .env so DATABASE_URL is available in this process
-        from dotenv import load_dotenv
-        load_dotenv("/var/www/brasilminis/backend/.env", override=False)
-        from app.db.session import SessionLocal
+        # Update DB diretamente no MESMO banco isolado usado pelo backend
+        # de teste. Nunca carregar backend/.env aqui, pois ele aponta para
+        # producao.
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from sqlalchemy.engine import make_url
+
+        test_database_url = os.environ["TEST_DATABASE_URL"]
+
+        expected_db = os.environ.get("TEST_DATABASE_NAME")
+        actual_db = make_url(test_database_url).database
+
+        if expected_db and actual_db != expected_db:
+            raise RuntimeError(
+                f"Banco de teste inesperado: {actual_db!r}; "
+                f"esperado: {expected_db!r}"
+            )
+
+        test_engine = create_engine(test_database_url)
+        TestSessionLocal = sessionmaker(
+            autocommit=False,
+            autoflush=False,
+            bind=test_engine,
+        )
+
         from app.models import Order
-        db = SessionLocal()
+        db = TestSessionLocal()
         try:
             o = db.get(Order, oid)
             o.payment_provider = "mercado_pago"
@@ -435,7 +453,7 @@ class TestDeleteOrderMPBlock:
         assert "Mercado Pago" in r2.json()["detail"] or "confirmado" in r2.json()["detail"].lower() or "CONFIRMADO" in r2.json()["detail"]
 
         # Cleanup: revert so it doesn't leak
-        db = SessionLocal()
+        db = TestSessionLocal()
         try:
             o = db.get(Order, oid)
             o.payment_provider = None
