@@ -48,6 +48,9 @@ export default function AdminProducts() {
   };
 
   const filtered = products.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()));
+  const bmap = {};
+  badgeOptions.forEach((b) => { bmap[b.text] = b; });
+  const badgeStyle = (t) => (bmap[t] ? { backgroundColor: bmap[t].bg_color, color: bmap[t].text_color } : { backgroundColor: "#2e2e2e", color: "#e5e7eb" });
 
   return (
     <div>
@@ -74,6 +77,7 @@ export default function AdminProducts() {
                 <th className="text-left p-4">Custo</th>
                 <th className="text-left p-4">Margem</th>
                 <th className="text-left p-4">Estoque</th>
+                <th className="text-left p-4">Badges</th>
                 <th className="text-right p-4">Ações</th>
               </tr>
             </thead>
@@ -92,6 +96,15 @@ export default function AdminProducts() {
                     <td className="p-4">{p.cost_price == null ? <span className="text-[#FFC107] text-xs">sem custo</span> : <span className="text-gray-300">{formatBRL(p.cost_price)}</span>}</td>
                     <td className="p-4" data-testid={`margin-${p.id}`}>{m ? <span className={m.pct < 20 ? "text-red-400" : "text-[#009B3A]"}>{m.pct.toFixed(1)}%</span> : <span className="text-gray-600">—</span>}</td>
                     <td className="p-4"><span className={p.stock <= 5 ? "text-[#FFC107]" : "text-gray-300"}>{p.stock}</span></td>
+                    <td className="p-4" data-testid={`product-badges-${p.id}`}>
+                      {(p.badges && p.badges.length) ? (
+                        <div className="flex flex-wrap gap-1 max-w-[220px]">
+                          {p.badges.map((t) => (
+                            <span key={t} style={badgeStyle(t)} className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full whitespace-nowrap">{t}</span>
+                          ))}
+                        </div>
+                      ) : <span className="text-gray-600">—</span>}
+                    </td>
                     <td className="p-4">
                       <div className="flex justify-end gap-2">
                         <button onClick={() => setEditing({ ...p, cost_price: p.cost_price ?? "", compare_at_price: p.compare_at_price ?? "", main_category_id: p.main_category_id || "", subcategory_id: p.subcategory_id || "", weight_kg: p.weight_kg ?? "", width_cm: p.width_cm ?? "", height_cm: p.height_cm ?? "", length_cm: p.length_cm ?? "", sku: p.sku ?? "", barcode: p.barcode ?? "", images: "", specs: p.specs || {} })} data-testid={`edit-product-${p.id}`} className="p-2 rounded-lg text-gray-400 hover:text-[#FFC107] hover:bg-white/5"><Pencil size={16} /></button>
