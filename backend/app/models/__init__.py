@@ -36,6 +36,24 @@ class User(Base):
     newsletter = Column(Boolean, default=False)
     addresses = Column(JSONB, default=list)
     created_at = Column(String, default=_now_iso)
+    # Exclusão protegida (soft delete) + anonimização LGPD
+    deleted_at = Column(String, nullable=True, index=True)
+    deleted_by = Column(String, nullable=True)
+    delete_reason = Column(String, nullable=True)
+    anonymized_at = Column(String, nullable=True)
+
+
+class DashboardReset(Base):
+    """Marco (baseline) de zeragem visual do Dashboard. Não apaga dados — apenas
+    define a partir de quando os indicadores acumulados passam a contar."""
+    __tablename__ = "dashboard_resets"
+    id = Column(String, primary_key=True, default=_uuid)
+    reset_at = Column(String, nullable=False)             # marco: eventos a partir deste instante
+    previous_reset_at = Column(String, nullable=True)     # marco anterior (para auditoria)
+    admin_id = Column(String, nullable=True)
+    admin_email = Column(String, nullable=True)
+    reason = Column(String, nullable=False)
+    created_at = Column(String, default=_now_iso, index=True)
 
 
 class Category(Base):

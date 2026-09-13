@@ -56,12 +56,18 @@ def resolve_period(period: str, start: str | None, end: str | None):
     return today - timedelta(days=29), today
 
 
-def compute(db: Session, period: str = "30d", start: str | None = None, end: str | None = None) -> dict:
+def compute(db: Session, period: str = "30d", start: str | None = None, end: str | None = None, baseline: str | None = None) -> dict:
     d_start, d_end = resolve_period(period, start, end)
+
+    # Marco de zeragem: aplica-se aos períodos padrão (cards do Dashboard).
+    # Períodos "custom" preservam acesso a relatórios históricos anteriores ao marco.
+    apply_baseline = bool(baseline) and period != "custom"
 
     orders = db.query(Order).all()
     in_range = []
     for o in orders:
+        if apply_baseline and (o.created_at or "") < baseline:
+            continue
         od = _parse_date(o.created_at)
         if od is not None and d_start <= od <= d_end:
             in_range.append(o)
@@ -217,6 +223,7 @@ def compute(db: Session, period: str = "30d", start: str | None = None, end: str
 
     return {
         "period": {"start": d_start.isoformat(), "end": d_end.isoformat(), "key": period},
+        "baseline": baseline if apply_baseline else None,
         "revenue_gross": _f(revenue_gross),
         "discounts": _f(discounts),
         "shipping_charged": _f(shipping_charged),

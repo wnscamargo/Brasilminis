@@ -244,6 +244,19 @@ class OrderStatusInput(BaseModel):
     status: str
 
 
+# ---------- Exclusão protegida de clientes ----------
+class CustomerDeleteInput(BaseModel):
+    reason: str
+    confirm: str            # deve ser exatamente "EXCLUIR"
+    anonymize: bool = False  # LGPD: apaga PII e libera e-mail/CPF para reuso
+
+
+# ---------- Zeragem administrativa do Dashboard ----------
+class DashboardResetInput(BaseModel):
+    reason: str
+    confirm: str            # deve ser exatamente "ZERAR DASHBOARD"
+
+
 # ---------- Banners ----------
 class BannerInput(BaseModel):
     title: str

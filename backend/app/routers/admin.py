@@ -22,6 +22,8 @@ from app.schemas import (
     CategoryReorderInput,
     CouponGenerateInput,
     CouponInput,
+    CustomerDeleteInput,
+    DashboardResetInput,
     ImageReorderInput,
     OrderDeleteInput,
     OrderStatusInput,
@@ -31,6 +33,8 @@ from app.schemas import (
 )
 from app.services import analytics_service, category_service
 from app.services import coupon_service
+from app.services import customer_admin_service
+from app.services import dashboard_service
 from app.services import order_admin_service
 from app.services import product_image_service as img_service
 from app.utils import slugify, to_dict
@@ -66,12 +70,20 @@ def _resolve_category_fields(db: Session, data: dict):
 # ---------------- Dashboard ----------------
 @router.get("/stats")
 def stats(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    baseline = dashboard_service.get_baseline(db)
     total_products = db.query(func.count(Product.id)).scalar() or 0
-    total_orders = db.query(func.count(Order.id)).scalar() or 0
-    total_customers = db.query(func.count(User.id)).filter(User.role == "customer").scalar() or 0
     low_stock = db.query(func.count(Product.id)).filter(Product.stock <= 5).scalar() or 0
 
-    orders = db.query(Order).all()
+    # KPIs acumulados respeitam o marco de zeragem (eventos posteriores ao baseline)
+    orders_q = db.query(Order)
+    customers_q = db.query(func.count(User.id)).filter(User.role == "customer")
+    if baseline:
+        orders_q = orders_q.filter(Order.created_at >= baseline)
+        customers_q = customers_q.filter(User.created_at >= baseline)
+
+    orders = orders_q.all()
+    total_orders = len(orders)
+    total_customers = customers_q.scalar() or 0
     revenue = round(sum((o.total or 0) for o in orders), 2)
 
     by_day: dict = {}
@@ -80,7 +92,10 @@ def stats(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db
         by_day[day] = round(by_day.get(day, 0) + (o.total or 0), 2)
     revenue_series = [{"date": k, "revenue": v} for k, v in sorted(by_day.items())][-7:]
 
-    recent = db.query(Order).order_by(Order.created_at.desc()).limit(5).all()
+    recent_q = db.query(Order)
+    if baseline:
+        recent_q = recent_q.filter(Order.created_at >= baseline)
+    recent = recent_q.order_by(Order.created_at.desc()).limit(5).all()
 
     return {
         "total_products": total_products,
@@ -90,6 +105,7 @@ def stats(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db
         "low_stock": low_stock,
         "revenue_series": revenue_series,
         "recent_orders": [to_dict(o) for o in recent],
+        "dashboard_baseline": baseline,
     }
 
 
@@ -101,7 +117,19 @@ def analytics(
     admin: dict = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    return analytics_service.compute(db, period, start, end)
+    baseline = dashboard_service.get_baseline(db)
+    return analytics_service.compute(db, period, start, end, baseline=baseline)
+
+
+# ---------------- Controle dos indicadores (zeragem do Dashboard) ----------------
+@router.get("/dashboard/baseline")
+def dashboard_baseline(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return {"baseline": dashboard_service.get_baseline(db), "history": dashboard_service.list_resets(db)}
+
+
+@router.post("/dashboard/reset")
+def dashboard_reset(payload: DashboardResetInput, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return dashboard_service.reset(db, admin, payload.reason, payload.confirm)
 
 
 # ---------------- Products ----------------
@@ -337,22 +365,18 @@ def admin_delete_coupon(code: str, admin: dict = Depends(get_current_admin), db:
 
 # ---------------- Customers ----------------
 @router.get("/customers")
-def admin_list_customers(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
-    users = db.query(User).filter(User.role == "customer").order_by(User.created_at.desc()).all()
-    result = []
-    for u in users:
-        orders_count = db.query(func.count(Order.id)).filter(Order.user_id == u.id).scalar() or 0
-        result.append({
-            "id": u.id,
-            "name": u.name,
-            "email": u.email,
-            "phone": u.phone or "",
-            "cpf": u.cpf or "",
-            "newsletter": bool(u.newsletter),
-            "orders_count": orders_count,
-            "created_at": u.created_at,
-        })
-    return result
+def admin_list_customers(scope: str = "active", admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return customer_admin_service.list_customers(db, scope)
+
+
+@router.delete("/customers/{user_id}")
+def admin_delete_customer(user_id: str, payload: CustomerDeleteInput, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return customer_admin_service.delete_customer(db, user_id, admin, payload.reason, payload.confirm, payload.anonymize)
+
+
+@router.post("/customers/{user_id}/restore")
+def admin_restore_customer(user_id: str, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return customer_admin_service.restore_customer(db, user_id, admin)
 
 
 @router.put("/customers/{user_id}")
