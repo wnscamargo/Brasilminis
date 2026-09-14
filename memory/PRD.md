@@ -489,3 +489,33 @@ A doc oficial descreve registro de webhook (POST /api/v0/webhook → secret_toke
 Nenhum arquivo/tabela/config/UI removido. O job só processa `superfrete_shipments` (tabela separada de `melhor_envio_shipments`). Sem conversão de provider.
 
 ### NENHUM deploy/push/alteração de produção. SuperFrete segue DESABILITADA (sem token real). Head Alembic único: `a7b8c9d0e1f2`.
+
+---
+
+## SuperFrete — ETAPA D (14/Jun/2026) — Produção controlada + validação ponta a ponta (PREVIEW, sem deploy)
+
+### Rollout gradual (gating do provider)
+- Novos campos em `superfrete_settings`: `rollout_mode` (DISABLED|TEST_ORDER_ONLY|ADMIN_ONLY|PERCENTAGE|ENABLED, default ENABLED p/ compat), `rollout_percentage` (0..100), `test_order_id`, `controlled_test_state` (JSONB). `Order.is_test_order` (Boolean, index).
+- `superfrete_service.is_public_eligible(db, user_id, is_admin)` decide o provider na cotação PÚBLICA `/api/shipping/quote`: DISABLED/TEST_ORDER_ONLY → sempre Melhor Envio; ADMIN_ONLY → só admin; PERCENTAGE → determinístico `sha256(user_id)%100 < pct` (visitante sem login → ME); ENABLED → todos. Pré-requisito: habilitada + token. Rollback para DISABLED é imediato p/ novos pedidos; envios já criados continuam sendo sincronizados. Troca de modo NÃO altera retroativamente provider/histórico de pedidos e envios existentes.
+- Pedidos de teste (`is_test_order=True`) são EXCLUÍDOS de métricas reais (`analytics_service.compute` e `/api/admin/stats`).
+
+### Teste controlado (Admin → SuperFrete, admin-only)
+- `superfrete_controlled_test_service.py`: fluxo passo a passo disparado explicitamente pelo admin — Definir parâmetros → Testar conexão → Cotar → Selecionar serviço → Criar envio (idempotente) → Consultar → Etiqueta (via `GET /api/v1/shipping-labels/{id}` SE suportar; senão fluxo híbrido/painel) → Capturar tracking → Sincronizar → Finalizar. Conexão/cotação NÃO têm efeito colateral (não criam envio/pedido). O envio de teste é vinculado a um PEDIDO DE TESTE inequívoco (`is_test_order`), reaproveitado entre reexecuções (sem duplicar pedido/shipment/etiqueta/evento). Checklist de 11 itens + status VALIDAÇÃO PENDENTE/PARCIAL/APROVADA/REPROVADA. Estado sanitizado (nunca token/segredos). Auditoria: SUPERFRETE_CONTROLLED_TEST_STARTED/QUOTE_CONFIRMED/SHIPMENT_CREATED/LABEL_READY/TRACKING_RECEIVED/COMPLETED/FAILED.
+- Endpoints admin-only: `GET /api/admin/superfrete/controlled-test`, `POST .../reset|params|connection|quote|select|create|consult|label|tracking|sync|finalize`.
+
+### Frontend
+- Admin → SuperFrete: seção "Rollout (liberação gradual)" (modo + percentual condicional) integrada ao Salvar; painel "Teste controlado" com formulário, botões numerados por etapa, lista de serviços da cotação, checklist visual (11 itens), status final, capturar tracking, finalizar e reiniciar.
+
+### Migration ADITIVA `b8c9d0e1f2a3` (down_revision a7b8c9d0e1f2; head único). Não altera migrations anteriores nem o Melhor Envio.
+
+### Limitação real da API (documentada)
+A SuperFrete NÃO expõe contrato público completo para compra/emissão/cancelamento automático da etiqueta → a etapa "Etiqueta" tenta `GET /api/v1/shipping-labels/{id}` e, se indisponível, mantém o FLUXO HÍBRIDO (emissão no painel), refletido no checklist como híbrido (não falha).
+
+### Testes
+- `tests/test_superfrete_rollout.py` **12/12** (DISABLED→ME, TEST_ORDER_ONLY bloqueia público, ADMIN_ONLY, ENABLED, PERCENTAGE determinístico + borda + visitante→ME, sem token→ME, troca de modo não altera histórico, fluxo completo do teste controlado com mocks, idempotência sem duplicar pedido/shipment, RBAC admin-only). Suíte completa **232 passed, 1 skipped**. Build frontend OK. Frontend E2E (testing_agent iteration_15): **100%**, 0 bugs, token nunca em texto puro, responsivo.
+
+### Plano de ativação gradual (preparado, NÃO ativado)
+1) Inserir token real e "Testar conexão" (reativa sync se estava suspensa). 2) Rodar Teste controlado até VALIDAÇÃO APROVADA. 3) rollout ADMIN_ONLY (validar com contas admin). 4) PERCENTAGE 10% → aumentar gradualmente. 5) ENABLED. Rollback: voltar a DISABLED a qualquer momento (novos pedidos → ME; envios SuperFrete existentes seguem sincronizando até estado terminal).
+
+### Estado do preview: SuperFrete DESABILITADA (sem token), `rollout_mode=TEST_ORDER_ONLY`, sem pedidos de teste. Head Alembic único: `b8c9d0e1f2a3`.
+### NENHUM DEPLOY REALIZADO. NENHUM PUSH PARA python-vps. NENHUM PEDIDO REAL ALTERADO. SUPERFRETE AINDA NÃO LIBERADA PARA TODOS OS CLIENTES.

@@ -66,6 +66,8 @@ def compute(db: Session, period: str = "30d", start: str | None = None, end: str
     orders = db.query(Order).all()
     in_range = []
     for o in orders:
+        if getattr(o, "is_test_order", False):
+            continue  # pedidos de teste controlado (SuperFrete) nunca entram em métricas reais
         if apply_baseline and (o.created_at or "") < baseline:
             continue
         od = _parse_date(o.created_at)

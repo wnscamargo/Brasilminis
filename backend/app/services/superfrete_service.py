@@ -15,6 +15,7 @@ from app.services import superfrete_client as client
 from app.services import audit_service
 
 MASK = "••••••••"
+_ROLLOUT_MODES = ("DISABLED", "TEST_ORDER_ONLY", "ADMIN_ONLY", "PERCENTAGE", "ENABLED")
 
 
 def _now() -> str:
@@ -49,7 +50,38 @@ def _mask(s: SuperfreteSettings) -> str:
 def public_status(db: Session) -> dict:
     """Status logístico público (sem segredos)."""
     s = _get(db)
-    return {"provider": "superfrete", "is_enabled": bool(s.is_enabled and s.token_enc), "environment": s.environment}
+    return {"provider": "superfrete", "is_enabled": bool(s.is_enabled and s.token_enc),
+            "environment": s.environment, "rollout_mode": s.rollout_mode or "ENABLED"}
+
+
+def _bucket(key: str) -> int:
+    """Bucket determinístico 0..99 (nunca aleatório)."""
+    import hashlib
+    return int(hashlib.sha256(str(key).encode("utf-8")).hexdigest(), 16) % 100
+
+
+def is_public_eligible(db: Session, user_id: str | None, is_admin: bool = False) -> bool:
+    """Decide se a cotação PÚBLICA (checkout) deve usar SuperFrete, conforme o rollout.
+
+    DISABLED / TEST_ORDER_ONLY -> nunca no checkout público (usa Melhor Envio).
+    ADMIN_ONLY -> só usuário admin. PERCENTAGE -> determinístico por user_id.
+    ENABLED -> todos. Pré-requisito: habilitada + token presente.
+    """
+    s = _get(db)
+    if not (s.is_enabled and s.token_enc):
+        return False
+    mode = s.rollout_mode or "ENABLED"
+    if mode in ("DISABLED", "TEST_ORDER_ONLY"):
+        return False
+    if mode == "ADMIN_ONLY":
+        return bool(is_admin)
+    if mode == "ENABLED":
+        return True
+    if mode == "PERCENTAGE":
+        if not user_id:
+            return False  # visitante sem login volta ao Melhor Envio
+        return _bucket(user_id) < int(s.rollout_percentage or 0)
+    return False
 
 
 def admin_status(db: Session) -> dict:
@@ -89,6 +121,9 @@ def admin_config(db: Session) -> dict:
         "default_length": float(s.default_length) if s.default_length is not None else None,
         "default_weight": float(s.default_weight) if s.default_weight is not None else None,
         "enabled_services": s.enabled_services or ["1", "2", "17"],
+        "rollout_mode": s.rollout_mode or "ENABLED",
+        "rollout_percentage": int(s.rollout_percentage or 0),
+        "test_order_id": s.test_order_id,
         "last_test_at": s.last_test_at,
         "last_error": s.last_error,
     }
@@ -114,6 +149,16 @@ def update_config(db: Session, data: dict, admin: dict) -> dict:
         s.enabled_services = [str(x) for x in data["enabled_services"]]
     if data.get("is_enabled") is not None:
         s.is_enabled = bool(data["is_enabled"])
+    if data.get("rollout_mode") is not None:
+        if data["rollout_mode"] not in _ROLLOUT_MODES:
+            raise HTTPException(status_code=400, detail="Modo de rollout inválido.")
+        s.rollout_mode = data["rollout_mode"]
+    if data.get("rollout_percentage") is not None:
+        try:
+            pct = int(data["rollout_percentage"])
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Percentual de rollout inválido.")
+        s.rollout_percentage = max(0, min(100, pct))
     # Token: só atualiza se vier valor NOVO (não a máscara)
     token = data.get("token")
     if token and MASK not in token:
@@ -122,7 +167,8 @@ def update_config(db: Session, data: dict, admin: dict) -> dict:
             s.status = "connected" if False else "not_configured"
     s.updated_at = _now()
     audit_service.log(db, "SUPERFRETE_CONFIG_UPDATED", admin, None,
-                      {"environment": s.environment, "is_enabled": bool(s.is_enabled)})
+                      {"environment": s.environment, "is_enabled": bool(s.is_enabled),
+                       "rollout_mode": s.rollout_mode, "rollout_percentage": int(s.rollout_percentage or 0)})
     db.commit()
     db.refresh(s)
     return admin_config(db)
@@ -265,6 +311,27 @@ def quote(db: Session, postal_code: str, items: list, user_id: str | None = None
     db.commit()
     return {"quote_id": q.id, "provider": "superfrete", "expires_at": q.expires_at,
             "destination_postal_code": dest, "options": options}
+
+
+def quote_raw(db: Session, origin: str, dest: str, pkg: dict, services: list | None = None,
+              insurance: float = 0.0) -> list:
+    """Cotação direta (teste controlado): usa pacote informado pelo admin, sem persistir pedido."""
+    s = _get(db)
+    tok = _token(s)
+    if not tok:
+        raise HTTPException(status_code=400, detail="Configure o token da SuperFrete antes de cotar.")
+    o = _clean_cep(origin or s.sender_postal_code or "")
+    d = _clean_cep(dest)
+    svc = ",".join([str(x) for x in (services or s.enabled_services or ["1", "2", "17"])])
+    payload = {
+        "from": {"postal_code": o}, "to": {"postal_code": d}, "services": svc,
+        "options": {"own_hand": False, "receipt": False,
+                    "insurance_value": insurance, "use_insurance_value": insurance > 0},
+        "package": {"weight": float(pkg.get("weight", 0)), "height": float(pkg.get("height", 0)),
+                    "width": float(pkg.get("width", 0)), "length": float(pkg.get("length", 0))},
+    }
+    raw = client.request(s.environment, tok, "POST", "/api/v0/calculator", user_agent=_user_agent(s), json=payload)
+    return _normalize(raw)
 
 
 # =================== ETAPA B — Operação logística nos pedidos ===================

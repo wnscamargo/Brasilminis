@@ -270,6 +270,8 @@ class Order(Base):
     deleted_by = Column(String, nullable=True)
     delete_reason = Column(String, nullable=True)
     stock_returned = Column(Boolean, default=False)
+    # Etapa D: pedido de teste controlado (SuperFrete). NUNCA um pedido comercial real.
+    is_test_order = Column(Boolean, default=False, index=True)
 
 
 class Banner(Base):
@@ -448,6 +450,11 @@ class SuperfreteSettings(Base):
     sync_suspended = Column(Boolean, default=False)         # suspenso por erro de autenticação (token)
     sync_suspended_reason = Column(String, nullable=True)   # motivo sanitizado da suspensão
     sync_suspended_at = Column(String, nullable=True)
+    # ---- Etapa D: rollout de produção controlada ----
+    rollout_mode = Column(String, default="ENABLED")       # DISABLED|TEST_ORDER_ONLY|ADMIN_ONLY|PERCENTAGE|ENABLED
+    rollout_percentage = Column(Integer, default=0)        # 0..100 (determinístico por user_id)
+    test_order_id = Column(String, nullable=True)          # pedido de teste controlado
+    controlled_test_state = Column(JSONB, nullable=True)   # checklist/estado do teste controlado
     created_at = Column(String, default=_now_iso)
     updated_at = Column(String, nullable=True)
 

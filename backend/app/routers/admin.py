@@ -77,7 +77,7 @@ def stats(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db
     low_stock = db.query(func.count(Product.id)).filter(Product.stock <= 5).scalar() or 0
 
     # KPIs acumulados respeitam o marco de zeragem (eventos posteriores ao baseline)
-    orders_q = db.query(Order)
+    orders_q = db.query(Order).filter(Order.is_test_order.isnot(True))
     customers_q = db.query(func.count(User.id)).filter(User.role == "customer")
     if baseline:
         orders_q = orders_q.filter(Order.created_at >= baseline)
@@ -94,7 +94,7 @@ def stats(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db
         by_day[day] = round(by_day.get(day, 0) + (o.total or 0), 2)
     revenue_series = [{"date": k, "revenue": v} for k, v in sorted(by_day.items())][-7:]
 
-    recent_q = db.query(Order)
+    recent_q = db.query(Order).filter(Order.is_test_order.isnot(True))
     if baseline:
         recent_q = recent_q.filter(Order.created_at >= baseline)
     recent = recent_q.order_by(Order.created_at.desc()).limit(5).all()
