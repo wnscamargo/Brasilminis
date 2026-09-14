@@ -15,7 +15,7 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.dependencies import get_db  # noqa: F401  (garante import do pacote)
 from app import models  # noqa: F401  (registra os modelos no metadata)
-from app.routers import account, admin, auth, banners, catalog, favorites, melhor_envio, orders, payments, reviews, site
+from app.routers import account, admin, auth, banners, catalog, favorites, melhor_envio, orders, payments, reviews, site, superfrete
 from app.seed import seed_admin, seed_data
 from app.services import melhor_envio_auth_service as auth_service
 
@@ -36,6 +36,7 @@ app.include_router(banners.router)
 app.include_router(site.router)
 app.include_router(admin.router)
 app.include_router(melhor_envio.router)
+app.include_router(superfrete.router)
 app.include_router(payments.router)
 
 # Uploads persistentes (identidade visual, imagens de produto) servidos sob /api/uploads.

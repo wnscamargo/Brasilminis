@@ -95,6 +95,14 @@ def shipping_quote(payload: ShippingQuoteInput, request: Request, db: Session = 
     except HTTPException:
         pass  # cotação pode ser feita por visitante
     items = [i.model_dump() for i in payload.items]
+    # Provider principal: SuperFrete (quando habilitada). Fallback: Melhor Envio (legado).
+    from app.services import superfrete_service as sf
+    from app.services.superfrete_client import SuperfreteUnavailable, SuperfreteError
+    if sf.public_status(db).get("is_enabled"):
+        try:
+            return sf.quote(db, payload.postal_code, items, user_id=user_id)
+        except (SuperfreteUnavailable, SuperfreteError):
+            pass  # fallback controlado -> legado / indisponível
     return quote_service.quote(db, payload.postal_code, items, user_id=user_id)
 
 

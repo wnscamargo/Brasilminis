@@ -409,3 +409,26 @@ O pod não tem remoto; criar/baserar branch em `python-vps` é feito via "Save t
 - Frontend: `context/BadgesContext.js` (novo), `components/Lightbox.js` (novo), `pages/admin/AdminBadges.js` (novo), `Home.js`, `components/ProductCard.js`, `pages/ProductDetail.js`, `pages/admin/AdminCategories.js`, `pages/admin/AdminProducts.js`, `App.js`, `pages/admin/AdminLayout.js`.
 
 ### Testes: backend `test_catalog_badges_home.py` 9/9 + suíte completa 191/191; frontend E2E ~95% (iteration_13), 2 itens de código corrigidos (Lightbox). Build OK. NENHUM deploy.
+
+---
+
+## Migração logística → SuperFrete — ETAPA A (14/Jun/2026) — PREVIEW, sem deploy
+
+### Contexto
+Tornar SuperFrete o provider logístico PRINCIPAL, mantendo Melhor Envio como LEGADO (nada apagado). Camada desacoplada: `Order` já possui `shipping_provider` + snapshot genérico (reutilizado). Playbook oficial confirma: cotação (`/api/v0/calculator`), user (`/api/v0/user`), order info (`/api/v0/order/info/{id}`), etiqueta (`/api/v1/shipping-labels/{id}`), webhook register (`/api/v0/webhook`). Compra/cancelamento de etiqueta e verificação de webhook NÃO têm contrato público completo → fluxo HÍBRIDO (painel) nas próximas etapas.
+
+### Entregue (Etapa A)
+- Migration ADITIVA `f6a7b8c9d0e1` (head único): tabelas `superfrete_settings`, `superfrete_shipments`, `superfrete_events`. Nenhuma tabela ME removida.
+- `superfrete_client.py` (httpx isolado, timeout, base sandbox/production, erros tipados) + `superfrete_service.py` (config segura, token Fernet cifrado e mascarado, teste de conexão, cotação normalizada, empacotamento determinístico com fallback de dimensões).
+- Endpoints admin: `GET /api/superfrete/status` (público), `GET/PUT /api/admin/superfrete/config`, `POST /api/admin/superfrete/test`, `POST /api/admin/superfrete/disconnect`. Auditoria: SUPERFRETE_CONFIG_UPDATED/CONNECTION_TESTED/CONNECTED/DISCONNECTED.
+- Checkout: `/api/shipping/quote` agora usa SuperFrete quando habilitada (fallback controlado p/ ME legado em indisponibilidade/erro).
+- Frontend: Admin → SuperFrete (`/admin/superfrete`) com status, ambiente, token mascarado/substituível, remetente, padrões de pacote, serviços, ativar, Salvar, Testar conexão, Desativar. Menu: "SuperFrete" (principal) + "Melhor Envio (legado)".
+- Segurança: token nunca retornado (só máscara `••••••••1234`); RBAC admin-only; erros externos não vazam token; timeout; sem httpx nos routers.
+
+### Testes: `tests/test_superfrete.py` 6/6 + suíte completa 196/197 (a 1 falha `TestSiteMaintenance` foi flaky por reinício de ambiente; passa isolada). Build frontend OK. Head único. **SuperFrete deixada DESABILITADA até o token real ser inserido** (checkout segue no ME legado, sem regressão).
+
+### Pendências (próximas etapas, já acordadas)
+- Etapa B: Admin → Pedidos (seção Logística: criar/sincronizar envio pós-pagamento idempotente, etiqueta híbrida "Abrir na SuperFrete", rastreio, retry).
+- Etapa C: webhook defensivo + mapper de status + job de sync.
+- Etapa D: testes ampliados + regressão + E2E + marcar ME como LEGADO/DESATIVADO.
+- Token SuperFrete: usuário fornecerá depois (campo pronto). "Testar conexão"/cotação real ficam pendentes até lá.

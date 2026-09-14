@@ -38,6 +38,7 @@ import AdminBanners from "@/pages/admin/AdminBanners";
 import AdminSite from "@/pages/admin/AdminSite";
 import AdminBranding from "@/pages/admin/AdminBranding";
 import AdminMelhorEnvio from "@/pages/admin/AdminMelhorEnvio";
+import AdminSuperFrete from "@/pages/admin/AdminSuperFrete";
 import AdminMercadoPago from "@/pages/admin/AdminMercadoPago";
 import AdminIntegracoes from "@/pages/admin/AdminIntegracoes";
 import AdminContent from "@/pages/admin/AdminContent";
@@ -99,6 +100,7 @@ function App() {
                   <Route path="conteudo" element={<AdminContent />} />
                   <Route path="integracoes" element={<AdminIntegracoes />} />
                   <Route path="melhor-envio" element={<AdminMelhorEnvio />} />
+                  <Route path="superfrete" element={<AdminSuperFrete />} />
                   <Route path="mercado-pago" element={<AdminMercadoPago />} />
                 </Route>
               </Routes>

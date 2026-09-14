@@ -415,6 +415,78 @@ class MelhorEnvioWebhookEvent(Base):
     received_at = Column(String, default=_now_iso)
 
 
+# ================= SuperFrete (provider logístico principal) =================
+class SuperfreteSettings(Base):
+    """Configuração SuperFrete (linha única, id=1). Token cifrado (Fernet)."""
+    __tablename__ = "superfrete_settings"
+    id = Column(Integer, primary_key=True, default=1)
+    environment = Column(String, default="sandbox")  # sandbox | production
+    token_enc = Column(Text, nullable=True)
+    sender_name = Column(String, default="")
+    sender_document = Column(String, default="")
+    sender_phone = Column(String, default="")
+    sender_email = Column(String, default="")
+    sender_postal_code = Column(String, default="")
+    sender_address = Column(String, default="")
+    sender_number = Column(String, default="")
+    sender_complement = Column(String, default="")
+    sender_district = Column(String, default="")
+    sender_city = Column(String, default="")
+    sender_state = Column(String, default="")
+    default_width = Column(Numeric(8, 2), nullable=True)
+    default_height = Column(Numeric(8, 2), nullable=True)
+    default_length = Column(Numeric(8, 2), nullable=True)
+    default_weight = Column(Numeric(8, 3), nullable=True)
+    enabled_services = Column(JSONB, default=list)  # ex.: ["1","2","17"]
+    is_enabled = Column(Boolean, default=False)
+    status = Column(String, default="not_configured")  # not_configured|connected|unavailable|error
+    last_test_at = Column(String, nullable=True)
+    last_error = Column(String, nullable=True)
+    created_at = Column(String, default=_now_iso)
+    updated_at = Column(String, nullable=True)
+
+
+class SuperfreteShipment(Base):
+    """Envio SuperFrete (1:1 com o pedido)."""
+    __tablename__ = "superfrete_shipments"
+    id = Column(String, primary_key=True, default=_uuid)
+    order_id = Column(String, ForeignKey("orders.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    external_id = Column(String, nullable=True, index=True)
+    service_code = Column(String, nullable=True)
+    service_name = Column(String, nullable=True)
+    carrier_name = Column(String, nullable=True)
+    quoted_price = Column(Numeric(12, 2), nullable=True)
+    charged_price = Column(Numeric(12, 2), nullable=True)
+    estimated_days = Column(Integer, nullable=True)
+    label_status = Column(String, nullable=True)
+    label_external_id = Column(String, nullable=True)
+    label_url = Column(String, nullable=True)
+    tracking_code = Column(String, nullable=True)
+    tracking_url = Column(String, nullable=True)
+    shipment_status = Column(String, default="PENDING", index=True)  # status interno normalizado
+    raw_status = Column(String, nullable=True)
+    raw = Column(JSONB, nullable=True)
+    last_error = Column(String, nullable=True)
+    last_sync_at = Column(String, nullable=True)
+    created_at = Column(String, default=_now_iso)
+    updated_at = Column(String, nullable=True)
+
+
+class SuperfreteEvent(Base):
+    """Idempotência/auditoria de eventos (webhook ou sync) SuperFrete."""
+    __tablename__ = "superfrete_events"
+    id = Column(String, primary_key=True, default=_uuid)
+    external_event_id = Column(String, nullable=True, index=True)
+    order_id = Column(String, nullable=True, index=True)
+    shipment_id = Column(String, nullable=True, index=True)
+    event_type = Column(String, nullable=True)
+    payload_hash = Column(String, nullable=True, index=True)
+    payload_json = Column(JSONB, nullable=True)
+    processed = Column(Boolean, default=False)
+    processed_at = Column(String, nullable=True)
+    created_at = Column(String, default=_now_iso)
+
+
 # ================= Mercado Pago (TESTE) =================
 class MpSettings(Base):
     """Config do gateway (linha única, id=1). Access Token cifrado (Fernet infra)."""
