@@ -326,6 +326,13 @@ class InstitutionalPage(BaseModel):
     hours: Optional[str] = None
     address: Optional[str] = None
     map_url: Optional[str] = None
+    # Toggles de exibição por campo (página Contato). None = não alterar.
+    show_email: Optional[bool] = None
+    show_phone: Optional[bool] = None
+    show_whatsapp: Optional[bool] = None
+    show_hours: Optional[bool] = None
+    show_address: Optional[bool] = None
+    show_map_url: Optional[bool] = None
 
 
 class SiteContentInput(BaseModel):
