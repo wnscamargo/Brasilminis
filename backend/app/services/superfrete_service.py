@@ -142,6 +142,10 @@ def test_connection(db: Session, admin: dict) -> dict:
         client.request(s.environment, tok, "GET", "/api/v0/user", user_agent=_user_agent(s))
         s.status = "connected"
         s.last_error = None
+        # Troca/teste bem-sucedido do token reativa a sincronização automática (suspensão global).
+        from app.services import superfrete_sync_service as sync
+        sync.clear_global_suspension(db)
+        s = _get(db)
         audit_service.log(db, "SUPERFRETE_CONNECTED", admin, None, {"environment": s.environment})
     except client.SuperfreteUnavailable as e:
         s.status = "unavailable"
@@ -340,11 +344,14 @@ def _ship_public(sh) -> dict:
         "tracking_code": sh.tracking_code, "tracking_url": sh.tracking_url,
         "shipment_status": sh.shipment_status, "raw_status": sh.raw_status,
         "last_error": sh.last_error, "last_sync_at": sh.last_sync_at, "created_at": sh.created_at,
+        "sync_enabled": bool(sh.sync_enabled), "next_sync_at": sh.next_sync_at,
+        "sync_attempts": sh.sync_attempts or 0,
     }
 
 
 def get_logistics(db: Session, order) -> dict:
     from app.models import SuperfreteShipment
+    from app.services import superfrete_sync_service as sync
     s = _get(db)
     sh = db.query(SuperfreteShipment).filter(SuperfreteShipment.order_id == order.id).first()
     ready, reason, _ = _readiness(db, order)
@@ -352,11 +359,14 @@ def get_logistics(db: Session, order) -> dict:
         "order_id": order.id,
         "order_provider": order.shipping_provider or ("superfrete" if s.is_enabled else None),
         "superfrete_enabled": bool(s.is_enabled and s.token_enc),
+        "sync_suspended": bool(s.sync_suspended),
+        "sync_suspended_reason": s.sync_suspended_reason,
         "environment": s.environment,
         "panel_url": client.panel_url(s.environment),
         "can_create": bool(ready and not sh),
         "blocked_reason": None if ready else reason,
         "shipment": _ship_public(sh) if sh else None,
+        "timeline": sync.timeline(db, sh.id) if sh else [],
     }
 
 
@@ -407,18 +417,26 @@ def create_shipment(db: Session, order, admin: dict) -> dict:
     db.refresh(sh)
     audit_service.log(db, "SUPERFRETE_SHIPMENT_CREATED", admin, order.id,
                       {"shipment_id": sh.id, "service": sh.service_name, "environment": s.environment})
+    from app.services import superfrete_sync_service as sync
+    sync.record_event(db, sh, source="SYSTEM", raw_status=None, normalized_status="PENDING_LABEL",
+                      description="Envio preparado", extra="prepared")
+    db.commit()
     return {"ok": True, "shipment": _ship_public(sh),
             "hybrid_note": "Finalize a compra/emissão da etiqueta no painel SuperFrete (Abrir na SuperFrete)."}
 
 
 def sync_shipment(db: Session, order, admin: dict) -> dict:
     from app.models import SuperfreteShipment
+    from app.services import superfrete_sync_service as sync
     sh = db.query(SuperfreteShipment).filter(SuperfreteShipment.order_id == order.id).first()
     if not sh:
         raise HTTPException(status_code=404, detail="Envio não encontrado para este pedido.")
-    if sh.shipment_status in ("CANCELED", "RETURNED"):
+    if sh.shipment_status in ("CANCELED", "RETURNED", "DELIVERED"):
         return {"ok": True, "shipment": _ship_public(sh)}
     s = _get(db)
+    if s.sync_suspended:
+        return {"ok": True, "shipment": _ship_public(sh),
+                "note": "Sincronização suspensa: verifique/atualize o token da SuperFrete."}
     tok = _token(s)
     if not sh.external_id or not tok:
         # Sem identificador externo (fluxo híbrido) não há o que sincronizar por API.
@@ -426,25 +444,10 @@ def sync_shipment(db: Session, order, admin: dict) -> dict:
         db.commit()
         return {"ok": True, "shipment": _ship_public(sh),
                 "note": "Sem identificador externo: informe o rastreio ou finalize no painel."}
-    try:
-        data = client.request(s.environment, tok, "GET", f"/api/v0/order/info/{sh.external_id}", user_agent=_user_agent(s))
-        raw = (data.get("status") if isinstance(data, dict) else None)
-        sh.raw_status = str(raw) if raw is not None else sh.raw_status
-        sh.shipment_status = map_status(raw)
-        if isinstance(data, dict):
-            sh.tracking_code = data.get("tracking") or sh.tracking_code
-        sh.last_error = None
-        audit_service.log(db, "SUPERFRETE_SHIPMENT_SYNCED", admin, order.id,
-                          {"shipment_id": sh.id, "status": sh.shipment_status})
-    except client.SuperfreteUnavailable as e:
-        sh.last_error = str(e)
-    except client.SuperfreteError as e:
-        sh.last_error = f"HTTP {e.status}"
-        sh.shipment_status = "ERROR" if e.status not in (429,) else sh.shipment_status
-    sh.last_sync_at = _now()
-    sh.updated_at = _now()
-    db.commit()
-    db.refresh(sh)
+    # Sincronização manual usa exatamente a mesma lógica defensiva do job (eventos/transições).
+    sync.sync_one(sh.id, worker=f"manual-{(admin or {}).get('email', 'admin')}", admin=admin)
+    db.expire_all()
+    sh = db.query(SuperfreteShipment).filter(SuperfreteShipment.order_id == order.id).first()
     return {"ok": True, "shipment": _ship_public(sh)}
 
 
@@ -462,7 +465,13 @@ def set_tracking(db: Session, order, tracking_code: str, external_id: str | None
     if sh.shipment_status in ("PENDING_LABEL", "LABEL_READY", "READY", "PENDING", "ERROR"):
         sh.shipment_status = "POSTED"
     sh.label_status = "issued_panel"
+    # Agenda sincronização automática assim que houver identificador externo.
+    if sh.external_id:
+        sh.next_sync_at = _now()
     sh.updated_at = _now()
+    from app.services import superfrete_sync_service as sync
+    sync.record_event(db, sh, source="MANUAL", raw_status="posted", normalized_status="POSTED",
+                      description="Rastreio informado (postagem)", extra=tracking_code)
     audit_service.log(db, "SUPERFRETE_TRACKING_SET", admin, order.id,
                       {"shipment_id": sh.id, "has_external_id": bool(external_id)})
     db.commit()

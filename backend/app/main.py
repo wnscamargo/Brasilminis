@@ -176,3 +176,20 @@ def startup():
             db.close()
     except Exception as exc:
         logger.error("Falha no seed: %s", type(exc).__name__)
+
+    # Scheduler SuperFrete (job de sincronização). Concorrência entre instâncias
+    # é protegida por advisory lock global no PostgreSQL.
+    try:
+        from app.services import superfrete_scheduler
+        superfrete_scheduler.start()
+    except Exception as exc:
+        logger.error("Falha ao iniciar scheduler SuperFrete: %s", type(exc).__name__)
+
+
+@app.on_event("shutdown")
+def shutdown():
+    try:
+        from app.services import superfrete_scheduler
+        superfrete_scheduler.stop()
+    except Exception:
+        pass

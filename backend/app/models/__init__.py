@@ -10,6 +10,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -442,6 +443,11 @@ class SuperfreteSettings(Base):
     status = Column(String, default="not_configured")  # not_configured|connected|unavailable|error
     last_test_at = Column(String, nullable=True)
     last_error = Column(String, nullable=True)
+    # ---- Etapa C: sincronização automática (nível global) ----
+    sync_enabled = Column(Boolean, default=True)            # master switch do job de sync
+    sync_suspended = Column(Boolean, default=False)         # suspenso por erro de autenticação (token)
+    sync_suspended_reason = Column(String, nullable=True)   # motivo sanitizado da suspensão
+    sync_suspended_at = Column(String, nullable=True)
     created_at = Column(String, default=_now_iso)
     updated_at = Column(String, nullable=True)
 
@@ -468,6 +474,14 @@ class SuperfreteShipment(Base):
     raw = Column(JSONB, nullable=True)
     last_error = Column(String, nullable=True)
     last_sync_at = Column(String, nullable=True)
+    # ---- Etapa C: controle individual de sincronização ----
+    sync_enabled = Column(Boolean, default=True)          # sync individual deste envio
+    next_sync_at = Column(String, nullable=True, index=True)  # próxima execução agendada (ISO UTC)
+    locked_at = Column(String, nullable=True)             # claim/lock por envio (TTL)
+    locked_by = Column(String, nullable=True)
+    sync_attempts = Column(Integer, default=0)            # tentativas consecutivas com falha temporária
+    version = Column(Integer, default=0)                  # versionamento otimista
+    last_status_at = Column(String, nullable=True)        # data do evento do status atual (provider)
     created_at = Column(String, default=_now_iso)
     updated_at = Column(String, nullable=True)
 
@@ -475,6 +489,7 @@ class SuperfreteShipment(Base):
 class SuperfreteEvent(Base):
     """Idempotência/auditoria de eventos (webhook ou sync) SuperFrete."""
     __tablename__ = "superfrete_events"
+    __table_args__ = (UniqueConstraint("dedupe_key", name="uq_superfrete_events_dedupe"),)
     id = Column(String, primary_key=True, default=_uuid)
     external_event_id = Column(String, nullable=True, index=True)
     order_id = Column(String, nullable=True, index=True)
@@ -484,7 +499,33 @@ class SuperfreteEvent(Base):
     payload_json = Column(JSONB, nullable=True)
     processed = Column(Boolean, default=False)
     processed_at = Column(String, nullable=True)
+    # ---- Etapa C: timeline idempotente ----
+    source = Column(String, nullable=True)                # POLL | WEBHOOK | MANUAL | SYSTEM
+    raw_status = Column(String, nullable=True)            # status bruto do provider
+    normalized_status = Column(String, nullable=True)     # status normalizado interno
+    description = Column(String, nullable=True)           # descrição sanitizada
+    dedupe_key = Column(String, nullable=True, index=True)  # chave determinística de deduplicação
+    provider_event_at = Column(String, nullable=True)     # data do evento no provider (se houver)
+    received_at = Column(String, nullable=True)           # data de recebimento
     created_at = Column(String, default=_now_iso)
+
+
+class SuperfreteSyncRun(Base):
+    """Observabilidade: histórico de execuções do job de sincronização."""
+    __tablename__ = "superfrete_sync_runs"
+    id = Column(String, primary_key=True, default=_uuid)
+    trigger = Column(String, nullable=True)               # auto | manual | reconcile
+    started_at = Column(String, nullable=True)
+    finished_at = Column(String, nullable=True)
+    duration_ms = Column(Integer, nullable=True)
+    processed = Column(Integer, default=0)
+    updated = Column(Integer, default=0)
+    unchanged = Column(Integer, default=0)
+    failed = Column(Integer, default=0)
+    skipped = Column(Integer, default=0)
+    status = Column(String, nullable=True)                # ok | skipped_locked | error
+    last_error = Column(String, nullable=True)            # sanitizado
+    created_by = Column(String, nullable=True)
 
 
 # ================= Mercado Pago (TESTE) =================

@@ -26,10 +26,17 @@ class SuperfreteUnavailable(Exception):
 
 
 class SuperfreteError(Exception):
-    def __init__(self, status: int, body: str):
+    def __init__(self, status: int, body: str, retry_after: int | None = None):
         self.status = status
         self.body = (body or "")[:500]
+        self.retry_after = retry_after
         super().__init__(f"SuperFrete {status}")
+
+
+class SuperfreteAuthError(SuperfreteError):
+    """Erro de autenticação (401/403): token inválido/expirado."""
+    def __init__(self, status: int = 401, body: str = "Token inválido ou expirado."):
+        super().__init__(status, body)
 
 
 def base_url(environment: str) -> str:
@@ -60,8 +67,15 @@ def request(environment: str, token: str, method: str, path: str, user_agent: st
         raise SuperfreteUnavailable("Tempo esgotado ao contatar a SuperFrete.")
     except httpx.HTTPError:
         raise SuperfreteUnavailable("SuperFrete indisponível.")
-    if r.status_code == 401:
-        raise SuperfreteError(401, "Token inválido ou expirado.")
+    if r.status_code in (401, 403):
+        raise SuperfreteAuthError(r.status_code, "Token inválido ou expirado.")
+    if r.status_code == 429:
+        ra = r.headers.get("Retry-After")
+        try:
+            ra_int = int(ra) if ra is not None else None
+        except (TypeError, ValueError):
+            ra_int = None
+        raise SuperfreteError(429, "Limite de requisições atingido.", retry_after=ra_int)
     if r.status_code >= 400:
         raise SuperfreteError(r.status_code, r.text)
     try:

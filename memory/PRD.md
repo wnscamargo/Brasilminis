@@ -463,3 +463,29 @@ Tornar SuperFrete o provider logístico PRINCIPAL, mantendo Melhor Envio como LE
 
 ### Fora de escopo (Etapa C+): webhook completo, job periódico de sync, emissão/cancelamento automático, marcar ME como legado/desativado.
 ### SuperFrete deixada DESABILITADA (checkout no ME legado até token real).
+
+---
+
+## SuperFrete — ETAPA C (14/Jun/2026) — Sincronização defensiva, eventos e job automático (PREVIEW, sem deploy)
+
+### Decisão sobre webhook (regra de ouro)
+A doc oficial descreve registro de webhook (POST /api/v0/webhook → secret_token) porém NÃO define algoritmo de assinatura verificável do payload. Portanto NÃO foi criado endpoint público funcional/desprotegido nem HMAC improvisado. Limitação registrada; a fonte automática de atualização é o JOB DE POLLING. Arquitetura pronta para webhook futuro (superfrete_events com source/dedupe_key + `record_event` reutilizável).
+
+### Entregue
+- **Job de sincronização** (`services/superfrete_sync_service.py` + `services/superfrete_scheduler.py`): APScheduler BackgroundScheduler único iniciado no startup (parado no shutdown). Concorrência entre instâncias protegida por **advisory lock global do PostgreSQL** (`pg_try_advisory_lock`); ciclos concorrentes retornam `skipped_locked`. Seleção em lotes de elegíveis (provider superfrete, com external_id, estado não-terminal, sync habilitado, next_sync_at vencido, lock livre/expirado) + **claim atômico por envio** (locked_at/locked_by com TTL). Backoff exponencial em falha temporária; respeita **Retry-After** no 429; erro 4xx (não-429) → estado ERROR.
+- **Suspensão GLOBAL por autenticação** (nível config, pois o token é do provider): 401/403 em qualquer sync → `superfrete_settings.sync_suspended=True` (o job para de tentar). Ao **substituir e testar o token com sucesso** (`POST /admin/superfrete/test` → connected), a suspensão é limpa automaticamente (`clear_global_suspension`) e a sync é reativada.
+- **Eventos idempotentes** (`superfrete_events`): `dedupe_key` (SHA-256 de campos estáveis) com **constraint única**; status bruto + normalizado, origem (POLL/WEBHOOK/MANUAL/SYSTEM), datas provider/recebimento, payload SANITIZADO (só status/tracking/id — nunca token/headers/segredos).
+- **Transições defensivas** (`can_transition`): sem regressão por ranking de estado; DELIVERED não volta a IN_TRANSIT; status desconhecido → `normalize_status`=None → PRESERVA estado; exceção permitida DELIVERED→RETURNING/RETURNED. Transições ignoradas → auditoria (`SUPERFRETE_TRANSITION_IGNORED`/`SUPERFRETE_STATUS_UNKNOWN`), sem poluir timeline do cliente.
+- **Reconciliação** (`reconcile`): destrava locks expirados, reprograma ativos sem sync recente (STALE), recupera ERROR — **nunca cria envio, troca provider ou altera snapshots**. Job de reconciliação periódico (6× o ciclo).
+- **Observabilidade** (`superfrete_sync_runs`): histórico de execuções (processados/atualizados/sem-alteração/falhas/ignorados/duração/status). Endpoints admin: `GET /admin/superfrete/sync/status`, `GET .../sync/runs`, `POST .../sync/run` (manual, protegido por advisory lock), `POST .../sync/reprocess-failures`, `POST .../sync/reconcile`, `GET /admin/orders/{id}/logistics/timeline`.
+- **Frontend**: Admin → SuperFrete ganhou o painel "Sincronização automática" (estado do scheduler, autenticação, ciclo, envios ativos, última execução com contadores, aviso de suspensão, ações Sincronizar agora / Reprocessar falhas / Histórico). AdminOrders: painel de logística agora mostra "Próxima tentativa", aviso de sync suspensa, timeline ordenada (origem/data) e botão Sincronizar só quando permitido.
+- **Migration ADITIVA** `a7b8c9d0e1f2` (down_revision f6a7b8c9d0e1; head único): +colunas em superfrete_settings (sync_enabled/sync_suspended/reason/at), superfrete_shipments (sync_enabled, next_sync_at, locked_at/by, sync_attempts, version, last_status_at + índice), superfrete_events (source, raw_status, normalized_status, description, dedupe_key único, provider_event_at, received_at) + tabela superfrete_sync_runs. Não altera a f6a7b8c9d0e1 nem toca no Melhor Envio.
+- **Config** (`core/config.py`): SUPERFRETE_SYNC_ENABLED, CYCLE_SECONDS(300), BATCH(20), LOCK_TTL(120), intervalos AWAITING(6h)/TRANSIT(3h)/OUT(1h), BACKOFF_BASE(5min)/MAX(6h), STALE(12h) — todos via env. Nova dep: APScheduler 3.11.0.
+
+### Testes
+- `tests/test_superfrete_sync.py` **19/19** (funções puras, elegibilidade, terminal ignorado, ciclo completo mockado avanço/sem-mudança/desconhecido, DELIVERED não regride, dedup de evento, backoff temporário, **auth suspende globalmente**, **troca+teste do token reativa**, token não vaza, ciclo concorrente pula por advisory lock, lock expirado recuperável, reconciliação não cria envio, reprocessar falhas, RBAC manual admin-only). Suíte completa **220 passed, 1 skipped**. Build frontend OK. Frontend E2E (testing_agent iteration_14): 100% dos itens testáveis, token nunca em texto puro, responsivo, sem erros de console.
+
+### Melhor Envio (LEGADO) preservado
+Nenhum arquivo/tabela/config/UI removido. O job só processa `superfrete_shipments` (tabela separada de `melhor_envio_shipments`). Sem conversão de provider.
+
+### NENHUM deploy/push/alteração de produção. SuperFrete segue DESABILITADA (sem token real). Head Alembic único: `a7b8c9d0e1f2`.

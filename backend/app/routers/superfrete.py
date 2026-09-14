@@ -67,3 +67,41 @@ def order_logistics_retry(order_id: str, admin: dict = Depends(get_current_admin
 @router.post("/admin/orders/{order_id}/logistics/tracking")
 def order_logistics_tracking(order_id: str, payload: dict, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
     return sf.set_tracking(db, _order_or_404(db, order_id), payload.get("tracking_code", ""), payload.get("external_id"), admin)
+
+
+# ---------------- Etapa C: sincronização automática / observabilidade ----------------
+from app.services import superfrete_sync_service as sync
+
+
+@router.get("/admin/superfrete/sync/status")
+def sync_status(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return sync.get_sync_status(db)
+
+
+@router.get("/admin/superfrete/sync/runs")
+def sync_runs(limit: int = 20, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return {"runs": sync.list_runs(db, limit)}
+
+
+@router.post("/admin/superfrete/sync/run")
+def sync_run_now(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    # Protegido contra execução simultânea via advisory lock global (skipped_locked).
+    return sync.run_sync_cycle(trigger="manual", admin=admin)
+
+
+@router.post("/admin/superfrete/sync/reprocess-failures")
+def sync_reprocess(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return sync.reprocess_failures(admin=admin)
+
+
+@router.post("/admin/superfrete/sync/reconcile")
+def sync_reconcile(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return sync.reconcile(admin=admin)
+
+
+@router.get("/admin/orders/{order_id}/logistics/timeline")
+def order_logistics_timeline(order_id: str, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    from app.models import SuperfreteShipment
+    _order_or_404(db, order_id)
+    sh = db.query(SuperfreteShipment).filter(SuperfreteShipment.order_id == order_id).first()
+    return {"timeline": sync.timeline(db, sh.id) if sh else []}

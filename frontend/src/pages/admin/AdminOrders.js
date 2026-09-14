@@ -295,16 +295,25 @@ function SuperFretePanel({ order }) {
           <Row l="Identificador externo" v={sh.external_id || "—"} />
           <Row l="Rastreio" v={sh.tracking_code || "—"} />
           <Row l="Última sincronização" v={sh.last_sync_at ? new Date(sh.last_sync_at).toLocaleString("pt-BR") : "—"} />
+          {sh.next_sync_at && !["DELIVERED", "RETURNED", "CANCELED"].includes(sh.shipment_status) && (
+            <Row l="Próxima tentativa" v={new Date(sh.next_sync_at).toLocaleString("pt-BR")} />
+          )}
         </div>
       ) : (
         <p className="text-xs text-gray-400 mb-2">{d.can_create ? "Pedido pronto para preparar o envio." : (d.blocked_reason || "Envio ainda não preparado.")}</p>
       )}
       {sh?.last_error && <p className="text-xs text-red-400 mt-2" data-testid={`sf-error-${order.id}`}>Erro: {sh.last_error}</p>}
+      {d.sync_suspended && (
+        <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-lg p-2.5 mt-2" data-testid={`sf-suspended-${order.id}`}>
+          <AlertTriangle className="text-red-400 shrink-0" size={15} />
+          <p className="text-[11px] text-red-300">Sincronização automática suspensa ({d.sync_suspended_reason || "autenticação inválida"}). Atualize o token em Admin → SuperFrete e teste a conexão.</p>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 mt-3">
         {!sh && d.can_create && <button onClick={create} disabled={busy} data-testid={`sf-create-${order.id}`} className="text-xs font-bold rounded-full px-4 py-2 bg-[#FFC107] text-[#111] flex items-center gap-1.5"><PackagePlus size={14} /> Preparar envio</button>}
         <button onClick={openPanel} data-testid={`sf-open-panel-${order.id}`} className="text-xs font-semibold rounded-full px-4 py-2 border border-[#1E3A8A] text-[#8fb0ff] flex items-center gap-1.5"><ExternalLink size={14} /> Abrir na SuperFrete</button>
-        {sh && <button onClick={sync} disabled={busy} data-testid={`sf-sync-${order.id}`} className="text-xs font-semibold rounded-full px-4 py-2 border border-[#2e2e2e] text-gray-300 flex items-center gap-1.5"><RefreshCw size={14} /> Sincronizar</button>}
+        {sh && !d.sync_suspended && <button onClick={sync} disabled={busy} data-testid={`sf-sync-${order.id}`} className="text-xs font-semibold rounded-full px-4 py-2 border border-[#2e2e2e] text-gray-300 flex items-center gap-1.5"><RefreshCw size={14} /> Sincronizar</button>}
         {sh?.shipment_status === "ERROR" && <button onClick={retry} disabled={busy} data-testid={`sf-retry-${order.id}`} className="text-xs font-semibold rounded-full px-4 py-2 border border-[#FFC107] text-[#FFC107]">Tentar novamente</button>}
         {sh?.tracking_code && <button onClick={() => { navigator.clipboard?.writeText(sh.tracking_code); toast.success("Rastreio copiado"); }} className="text-xs font-semibold rounded-full px-4 py-2 border border-[#2e2e2e] text-gray-300 flex items-center gap-1.5"><Copy size={13} /> Copiar rastreio</button>}
         {sh?.tracking_url && <a href={sh.tracking_url} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold rounded-full px-4 py-2 border border-[#2e2e2e] text-gray-300">Abrir rastreamento</a>}
@@ -317,6 +326,24 @@ function SuperFretePanel({ order }) {
             <input value={track} onChange={(e) => setTrack(e.target.value)} data-testid={`sf-track-input-${order.id}`} placeholder="Código de rastreio" className="w-full bg-[#111] border border-[#2e2e2e] rounded-lg px-3 py-2 text-sm text-white" />
           </div>
           <button onClick={saveTrack} disabled={busy || !track.trim()} data-testid={`sf-track-save-${order.id}`} className="text-xs font-bold rounded-full px-4 py-2 bg-[#1E3A8A] text-white disabled:opacity-40">Salvar rastreio</button>
+        </div>
+      )}
+      {sh && (d.timeline || []).length > 0 && (
+        <div className="mt-3 pt-3 border-t border-[#1a1a1a]" data-testid={`sf-timeline-${order.id}`}>
+          <p className="text-[11px] font-bold text-gray-400 uppercase mb-2">Linha do tempo</p>
+          <ul className="space-y-2">
+            {(d.timeline || []).map((t) => (
+              <li key={t.id} className="flex items-start gap-2 text-xs">
+                <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#8fb0ff] shrink-0" />
+                <div>
+                  <p className="text-gray-200">{t.description || t.status || t.raw_status}</p>
+                  <p className="text-[10px] text-gray-500">
+                    {new Date(t.provider_event_at || t.created_at).toLocaleString("pt-BR")} · origem: {t.source}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       <p className="text-[11px] text-gray-600 mt-2">A compra/emissão e o cancelamento da etiqueta são finalizados no painel SuperFrete. Depois, sincronize ou informe o rastreio aqui.</p>

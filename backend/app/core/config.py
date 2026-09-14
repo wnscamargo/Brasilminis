@@ -35,6 +35,20 @@ class Settings:
     MERCADO_PAGO_TOKEN_ENCRYPTION_KEY: str = os.environ.get("MERCADO_PAGO_TOKEN_ENCRYPTION_KEY", "")
     MERCADO_PAGO_API_BASE: str = os.environ.get("MERCADO_PAGO_API_BASE", "https://api.mercadopago.com")
 
+    # ----- SuperFrete: job de sincronização automática -----
+    SUPERFRETE_SYNC_ENABLED: bool = os.environ.get("SUPERFRETE_SYNC_ENABLED", "true").lower() == "true"
+    SUPERFRETE_SYNC_CYCLE_SECONDS: int = int(os.environ.get("SUPERFRETE_SYNC_CYCLE_SECONDS", "300"))
+    SUPERFRETE_SYNC_BATCH: int = int(os.environ.get("SUPERFRETE_SYNC_BATCH", "20"))
+    SUPERFRETE_LOCK_TTL_SECONDS: int = int(os.environ.get("SUPERFRETE_LOCK_TTL_SECONDS", "120"))
+    # Intervalos por estado (segundos)
+    SUPERFRETE_INTERVAL_AWAITING: int = int(os.environ.get("SUPERFRETE_INTERVAL_AWAITING", "21600"))   # aguardando postagem: 6h
+    SUPERFRETE_INTERVAL_TRANSIT: int = int(os.environ.get("SUPERFRETE_INTERVAL_TRANSIT", "10800"))     # em trânsito: 3h
+    SUPERFRETE_INTERVAL_OUT: int = int(os.environ.get("SUPERFRETE_INTERVAL_OUT", "3600"))              # saiu p/ entrega: 1h
+    SUPERFRETE_BACKOFF_BASE: int = int(os.environ.get("SUPERFRETE_BACKOFF_BASE", "300"))               # backoff base: 5min
+    SUPERFRETE_BACKOFF_MAX: int = int(os.environ.get("SUPERFRETE_BACKOFF_MAX", "21600"))               # backoff máx: 6h
+    # Reconciliação: envios ativos sem sync há mais de N segundos são reprogramados
+    SUPERFRETE_STALE_SECONDS: int = int(os.environ.get("SUPERFRETE_STALE_SECONDS", "43200"))           # 12h
+
     @property
     def MELHOR_ENVIO_BASE_URL(self) -> str:
         return (
