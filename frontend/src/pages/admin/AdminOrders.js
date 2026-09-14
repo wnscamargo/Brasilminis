@@ -1,6 +1,6 @@
 import { useEffect, useState, Fragment } from "react";
 import { toast } from "sonner";
-import { Truck, ChevronDown, ChevronUp, Printer, MapPin, RefreshCw, Trash2, AlertTriangle, X } from "lucide-react";
+import { Truck, ChevronDown, ChevronUp, Printer, MapPin, RefreshCw, Trash2, AlertTriangle, X, ExternalLink, Copy, PackagePlus } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import { formatBRL } from "@/lib/brand";
 
@@ -88,7 +88,10 @@ export default function AdminOrders() {
                   </tr>
                   {expanded === o.id && (
                     <tr className="bg-[#0d0d0d]">
-                      <td colSpan={7} className="p-4"><ShipmentPanel order={o} /></td>
+                      <td colSpan={7} className="p-4 space-y-4">
+                        <SuperFretePanel order={o} />
+                        <ShipmentPanel order={o} />
+                      </td>
                     </tr>
                   )}
                 </Fragment>
@@ -234,11 +237,89 @@ function ShipmentPanel({ order }) {
   );
 }
 
-function Row({ l, v }) {
-  return (
+function Row({ l, v }) {  return (
     <div className="flex justify-between gap-3 py-1 text-xs border-b border-[#1a1a1a] last:border-0">
       <span className="text-gray-500">{l}</span>
       <span className="text-gray-200 text-right">{v}</span>
+    </div>
+  );
+}
+
+
+const SF_BADGE = {
+  PENDING_LABEL: ["Pronto p/ etiqueta", "bg-[#FFC107]/15 text-[#FFC107]"],
+  LABEL_READY: ["Etiqueta pronta", "bg-[#1E3A8A]/20 text-[#8fb0ff]"],
+  POSTED: ["Postado", "bg-[#1E3A8A]/20 text-[#8fb0ff]"],
+  IN_TRANSIT: ["Em trânsito", "bg-[#1E3A8A]/20 text-[#8fb0ff]"],
+  OUT_FOR_DELIVERY: ["Saiu para entrega", "bg-[#1E3A8A]/20 text-[#8fb0ff]"],
+  DELIVERED: ["Entregue", "bg-[#009B3A]/15 text-[#009B3A]"],
+  DELIVERY_FAILED: ["Falha na entrega", "bg-red-500/15 text-red-400"],
+  CANCELED: ["Cancelado", "bg-gray-500/15 text-gray-400"],
+  RETURNED: ["Devolvido", "bg-gray-500/15 text-gray-400"],
+  ERROR: ["Erro", "bg-red-500/15 text-red-400"],
+};
+
+function SuperFretePanel({ order }) {
+  const [d, setD] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [track, setTrack] = useState("");
+  const load = () => api.get(`/admin/orders/${order.id}/logistics`).then((r) => setD(r.data));
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [order.id]);
+  if (!d) return <div className="text-xs text-gray-500">Carregando logística…</div>;
+  if (!d.superfrete_enabled && !d.shipment)
+    return <div className="text-xs text-gray-500 border border-[#2e2e2e] rounded-lg p-3" data-testid={`sf-panel-${order.id}`}>SuperFrete não habilitada. Configure em Admin → SuperFrete.</div>;
+
+  const sh = d.shipment;
+  const [label, cls] = sh ? (SF_BADGE[sh.shipment_status] || [sh.shipment_status, "bg-gray-500/15 text-gray-400"]) : ["—", ""];
+  const act = async (fn) => { setBusy(true); try { await fn(); await load(); } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); } finally { setBusy(false); } };
+  const create = () => { if (!window.confirm("Preparar envio na SuperFrete para este pedido?")) return; act(async () => { const { data } = await api.post(`/admin/orders/${order.id}/logistics/create`); toast.success(data.hybrid_note || "Envio preparado"); }); };
+  const sync = () => act(async () => { await api.post(`/admin/orders/${order.id}/logistics/sync`); toast.success("Sincronizado"); });
+  const retry = () => act(async () => { await api.post(`/admin/orders/${order.id}/logistics/retry`); toast.success("Reprocessando"); });
+  const saveTrack = () => act(async () => { await api.post(`/admin/orders/${order.id}/logistics/tracking`, { tracking_code: track.trim() }); setTrack(""); toast.success("Rastreio registrado"); });
+  const openPanel = () => window.open(d.panel_url, "_blank", "noopener,noreferrer");
+
+  return (
+    <div className="border border-[#1E3A8A]/40 rounded-lg p-4 bg-[#0b1020]/40" data-testid={`sf-panel-${order.id}`}>
+      <div className="flex items-center gap-2 mb-3">
+        <Truck size={16} className="text-[#8fb0ff]" />
+        <span className="text-sm font-bold text-white uppercase tracking-wide">Logística · SuperFrete</span>
+        {sh && <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${cls}`} data-testid={`sf-status-${order.id}`}>{label}</span>}
+      </div>
+      {sh ? (
+        <div className="grid md:grid-cols-2 gap-x-8">
+          <Row l="Provider" v={sh.provider} />
+          <Row l="Serviço / Transportadora" v={`${sh.service_name || "—"} · ${sh.carrier_name || "—"}`} />
+          <Row l="Frete cobrado" v={sh.charged_price != null ? `R$ ${sh.charged_price.toFixed(2)}` : "—"} />
+          <Row l="Custo (cotado)" v={sh.quoted_price != null ? `R$ ${sh.quoted_price.toFixed(2)}` : "—"} />
+          <Row l="Prazo estimado" v={sh.estimated_days ? `${sh.estimated_days} dia(s)` : "—"} />
+          <Row l="Identificador externo" v={sh.external_id || "—"} />
+          <Row l="Rastreio" v={sh.tracking_code || "—"} />
+          <Row l="Última sincronização" v={sh.last_sync_at ? new Date(sh.last_sync_at).toLocaleString("pt-BR") : "—"} />
+        </div>
+      ) : (
+        <p className="text-xs text-gray-400 mb-2">{d.can_create ? "Pedido pronto para preparar o envio." : (d.blocked_reason || "Envio ainda não preparado.")}</p>
+      )}
+      {sh?.last_error && <p className="text-xs text-red-400 mt-2" data-testid={`sf-error-${order.id}`}>Erro: {sh.last_error}</p>}
+
+      <div className="flex flex-wrap gap-2 mt-3">
+        {!sh && d.can_create && <button onClick={create} disabled={busy} data-testid={`sf-create-${order.id}`} className="text-xs font-bold rounded-full px-4 py-2 bg-[#FFC107] text-[#111] flex items-center gap-1.5"><PackagePlus size={14} /> Preparar envio</button>}
+        <button onClick={openPanel} data-testid={`sf-open-panel-${order.id}`} className="text-xs font-semibold rounded-full px-4 py-2 border border-[#1E3A8A] text-[#8fb0ff] flex items-center gap-1.5"><ExternalLink size={14} /> Abrir na SuperFrete</button>
+        {sh && <button onClick={sync} disabled={busy} data-testid={`sf-sync-${order.id}`} className="text-xs font-semibold rounded-full px-4 py-2 border border-[#2e2e2e] text-gray-300 flex items-center gap-1.5"><RefreshCw size={14} /> Sincronizar</button>}
+        {sh?.shipment_status === "ERROR" && <button onClick={retry} disabled={busy} data-testid={`sf-retry-${order.id}`} className="text-xs font-semibold rounded-full px-4 py-2 border border-[#FFC107] text-[#FFC107]">Tentar novamente</button>}
+        {sh?.tracking_code && <button onClick={() => { navigator.clipboard?.writeText(sh.tracking_code); toast.success("Rastreio copiado"); }} className="text-xs font-semibold rounded-full px-4 py-2 border border-[#2e2e2e] text-gray-300 flex items-center gap-1.5"><Copy size={13} /> Copiar rastreio</button>}
+        {sh?.tracking_url && <a href={sh.tracking_url} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold rounded-full px-4 py-2 border border-[#2e2e2e] text-gray-300">Abrir rastreamento</a>}
+      </div>
+
+      {sh && (
+        <div className="flex flex-wrap items-end gap-2 mt-3 pt-3 border-t border-[#1a1a1a]">
+          <div className="flex-1 min-w-[180px]">
+            <label className="text-[11px] text-gray-500 block mb-1">Informar rastreio (emitido no painel)</label>
+            <input value={track} onChange={(e) => setTrack(e.target.value)} data-testid={`sf-track-input-${order.id}`} placeholder="Código de rastreio" className="w-full bg-[#111] border border-[#2e2e2e] rounded-lg px-3 py-2 text-sm text-white" />
+          </div>
+          <button onClick={saveTrack} disabled={busy || !track.trim()} data-testid={`sf-track-save-${order.id}`} className="text-xs font-bold rounded-full px-4 py-2 bg-[#1E3A8A] text-white disabled:opacity-40">Salvar rastreio</button>
+        </div>
+      )}
+      <p className="text-[11px] text-gray-600 mt-2">A compra/emissão e o cancelamento da etiqueta são finalizados no painel SuperFrete. Depois, sincronize ou informe o rastreio aqui.</p>
     </div>
   );
 }

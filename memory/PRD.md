@@ -432,3 +432,34 @@ Tornar SuperFrete o provider logístico PRINCIPAL, mantendo Melhor Envio como LE
 - Etapa C: webhook defensivo + mapper de status + job de sync.
 - Etapa D: testes ampliados + regressão + E2E + marcar ME como LEGADO/DESATIVADO.
 - Token SuperFrete: usuário fornecerá depois (campo pronto). "Testar conexão"/cotação real ficam pendentes até lá.
+
+---
+
+## SuperFrete — ETAPA B (14/Jun/2026) — Operação logística nos pedidos (PREVIEW, sem deploy)
+
+### Entregue
+- Máquina de estados interna (NOT_READY/READY/PENDING_LABEL/LABEL_READY/POSTED/IN_TRANSIT/OUT_FOR_DELIVERY/DELIVERED/DELIVERY_FAILED/RETURNING/RETURNED/CANCELED/ERROR) + `map_status()` defensivo (status bruto preservado; desconhecido → PENDING_LABEL, nunca quebra).
+- Regra de criação: só com pagamento aprovado + endereço válido + peso/dimensões (do snapshot da cotação) + serviço selecionado + SuperFrete habilitada. Pedidos pendentes bloqueiam (400).
+- Idempotência/concorrência: 1 shipment por pedido (order_id UNIQUE) + captura de IntegrityError → retorno idempotente; retry só em ERROR (sem retry em auth/validação).
+- Snapshot imutável do envio (provider, serviço, preços cobrado/cotado, prazo, CEPs, pacote, itens, ambiente, origem/data) em `superfrete_shipments.raw.snapshot`.
+- Fluxo HÍBRIDO: "Abrir na SuperFrete" abre apenas domínio oficial (`client.panel_url`), sem token na URL; compra/emissão/cancelamento finalizados no painel; rastreio pode ser informado manualmente (auditado) ou sincronizado via `/api/v0/order/info/{id}` quando houver `external_id`.
+- Auditoria: SUPERFRETE_SHIPMENT_CREATED/SYNCED/RETRY, SUPERFRETE_TRACKING_SET.
+
+### Endpoints (admin-only)
+- `GET /api/admin/orders/{id}/logistics`
+- `POST /api/admin/orders/{id}/logistics/create`
+- `POST /api/admin/orders/{id}/logistics/sync`
+- `POST /api/admin/orders/{id}/logistics/retry`
+- `POST /api/admin/orders/{id}/logistics/tracking` `{tracking_code, external_id?}`
+
+### Arquivos
+- Backend: `services/superfrete_service.py` (+ lógica B), `routers/superfrete.py` (+ endpoints B). Sem httpx nos routers. Sem nova migration (reusa tabelas da Etapa A). Head único `f6a7b8c9d0e1`.
+- Frontend: `pages/admin/AdminOrders.js` — painel "Logística · SuperFrete" por pedido (status badge, serviço/transportadora, preços, prazo, id externo, rastreio, última sync, erro; ações condicionais: Preparar envio, Abrir na SuperFrete, Sincronizar, Tentar novamente, Informar/Copiar rastreio, Abrir rastreamento). Painel Melhor Envio legado permanece abaixo.
+
+### Testes: `tests/test_superfrete_logistics.py` 5/5 (mapper conhecido/desconhecido/None; pendente bloqueia; RBAC 403; create idempotente + sync + tracking→POSTED + token não vaza; tracking exige código) + suíte completa **202/202**. Build frontend OK. UI validada via Playwright (painel, criar, badge "Pronto p/ etiqueta", abrir painel, sincronizar, rastreio).
+
+### Limitações reais (documentadas)
+- API SuperFrete não expõe contrato público completo para adicionar ao carrinho / comprar / cancelar etiqueta → criação = preparo local do envio (snapshot) + emissão no painel (híbrido). Sync por API só com `external_id`.
+
+### Fora de escopo (Etapa C+): webhook completo, job periódico de sync, emissão/cancelamento automático, marcar ME como legado/desativado.
+### SuperFrete deixada DESABILITADA (checkout no ME legado até token real).
