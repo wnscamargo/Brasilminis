@@ -572,3 +572,12 @@ Não era bug do header: eram **categorias reais criadas pelos testes automatizad
 - `tests/test_header_categories.py` **6/6** (só raízes no topo, filhos aninhados sem duplicar, inativos excluídos, raiz com filhos, ordenação por sort_order, criação dinâmica + cleanup). Suíte completa **252 passed, 1 skipped** (teardown mantém 29 categorias canônicas). Build frontend OK. Frontend E2E (testing_agent iteration_17): 90% → após corrigir a11y do teclado, itens do header 100%; mobile overflow (fora do header) mitigado via `overflow-x-hidden`. Screenshots desktop 1920 e teclado/ESC verificados.
 
 ### NENHUM DEPLOY. NENHUM PUSH PARA python-vps. NENHUM DADO DE PRODUÇÃO ALTERADO. Categorias continuam 100% administradas pelo Admin (nada hardcoded).
+
+---
+
+## Pacote de integração para produção (15/Jun/2026) — PREVIEW, sem deploy
+
+- **Endurecimento do teardown de testes** (`tests/conftest.py`): deixou de fazer purge "cego". Agora tira snapshot dos IDs de categorias ANTES da sessão e remove no teardown SOMENTE os IDs criados DURANTE a sessão e não canônicos. Dados pré-existentes/Admin/produção NUNCA são tocados. Não é (e não deve ser usado como) rotina de limpeza de produção.
+- **Branch (workspace):** `main` | **Head Alembic (único):** `c9d0e1f2a3b4`.
+- **Migrations em ordem (cadeia linear, head único):** ea44b6ac0765 (initial) → 21a5e90c8117 → 455b5d4bbb3e → c1f2a3b4d5e6 → d2e3f4a5b6c7 → e4f5a6b7c8d9 → f5a6b7c8d9e0 → a1b2c3d4e5f6 → b2c3d4e5f6a7 → c3d4e5f6a7b8 → d4e5f6a7b8c9 → e5f6a7b8c9d0 → f6a7b8c9d0e1 (SuperFrete A) → a7b8c9d0e1f2 (C) → b8c9d0e1f2a3 (D) → c9d0e1f2a3b4 (E, head).
+- **Diff real vs `python-vps`:** não computável a partir do preview (git local em `main`, sem remote `python-vps`). Deve ser obtido no GitHub via Pull Request (base `python-vps` ← compare `production-improvements-sep2026`), após "Save to Github". "Save to Github" versiona o código; NÃO faz deploy e NÃO altera produção.
