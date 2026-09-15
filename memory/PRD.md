@@ -545,3 +545,30 @@ A SuperFrete NÃO expõe contrato público completo para compra/emissão/cancela
 
 ### Estado do preview: SuperFrete DESABILITADA (sem token), `rollout_mode=TEST_ORDER_ONLY`, sem pedidos/shipments/histórico de teste. Head Alembic único: `c9d0e1f2a3b4`.
 ### NENHUM DEPLOY REALIZADO. NENHUM PUSH PARA python-vps. NENHUM ROLLOUT ALTERADO EM PRODUÇÃO. SUPERFRETE CONTINUA SOB CONTROLE MANUAL.
+
+---
+
+## Header / Menu dinâmico de categorias — correção (15/Jun/2026, PREVIEW)
+
+### Causa raiz de CNTMAIN/EMPTY/FMAIN/HOMECAT
+Não era bug do header: eram **categorias reais criadas pelos testes automatizados** (`test_catalog_badges_home.py`, `test_new_features.py`) via `POST /api/admin/categories`, que rodavam contra o banco compartilhado do preview e **nunca eram removidas**. A cada execução acumulavam ~14 raízes + subs ("TEST Main", "CntMain", "Empty", "FMain", "HomeCat", "NoHome", "Inactive", "New/Old"). Como são raízes ATIVAS, o header (que renderiza a árvore ativa do Admin) as exibia.
+
+### Correção estrutural (sem hacks por nome no componente)
+1. **Limpeza de dados**: removidas 65 categorias de teste + 25 produtos de teste, mantendo apenas o conjunto CANÔNICO do seed (GROUP_ORDER ∪ subcategorias do seed). Restauradas as 24 subcategorias canônicas do seed que haviam sido perdidas. Estado final: 5 raízes (Miniaturas, Colecionáveis, Acessórios, Vestuário, Presentes), cada uma com filhos.
+2. **Higiene de testes** (`tests/conftest.py`): teardown de sessão autouse que, ao fim da suíte, remove qualquer categoria/produto NÃO canônico — impede recorrência estruturalmente (não por nome no runtime).
+3. **Regra pública final**: o header consome `GET /api/categories?tree=true` (somente ATIVAS, aninhado). Renderiza apenas RAÍZES; subcategorias vivem no dropdown. `show_on_home` NÃO controla o header (semântica preservada; Home e Header têm finalidades distintas).
+
+### Header reescrito (`components/layout/Header.js`)
+- Desktop: `DesktopNav` mede o espaço disponível (ResizeObserver + linha de medição oculta) e move as categorias que não cabem para um menu **"MAIS ▼"** (cálculo por espaço, recalculado no resize; prioriza sort_order). Raiz sem filhos = link direto; com filhos = link + ▼ + dropdown.
+- Dropdown acessível: abre por hover E clique; fecha com **ESC** e **clique-fora**; navegação por teclado (ArrowDown abre e foca o 1º item via requestAnimationFrame; ArrowDown/ArrowUp entre itens); `aria-haspopup`/`aria-expanded`/`role=menu`; z-50; dentro da viewport.
+- Mobile/Tablet: hambúrguer + accordion por categoria (toggle expande subs; link da raiz preservado); `overflow-x-hidden` no menu.
+- `Layout.js`: `<main>` recebe `overflow-x-hidden` (guarda contra rolagem horizontal pré-existente de product cards/newsletter no mobile; não quebra o header sticky, que é irmão de `<main>`).
+
+### Comportamento
+- Desktop compacto: `INÍCIO | MINIATURAS ▼ | COLECIONÁVEIS ▼ | ACESSÓRIOS ▼ | VESTUÁRIO ▼ | PRESENTES ▼ | LANÇAMENTOS | PROMOÇÕES | MARCAS | CONTATO`. Sem rolagem horizontal em 1024/1280/1440/1920.
+- Preservado: Home dinâmica, árvore/subcategorias, contagem de produtos, badges/BadgesContext, galeria/lightbox, busca, favoritos, carrinho, auth/admin.
+
+### Testes
+- `tests/test_header_categories.py` **6/6** (só raízes no topo, filhos aninhados sem duplicar, inativos excluídos, raiz com filhos, ordenação por sort_order, criação dinâmica + cleanup). Suíte completa **252 passed, 1 skipped** (teardown mantém 29 categorias canônicas). Build frontend OK. Frontend E2E (testing_agent iteration_17): 90% → após corrigir a11y do teclado, itens do header 100%; mobile overflow (fora do header) mitigado via `overflow-x-hidden`. Screenshots desktop 1920 e teclado/ESC verificados.
+
+### NENHUM DEPLOY. NENHUM PUSH PARA python-vps. NENHUM DADO DE PRODUÇÃO ALTERADO. Categorias continuam 100% administradas pelo Admin (nada hardcoded).

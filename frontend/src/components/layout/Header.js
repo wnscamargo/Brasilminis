@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, Heart, ShoppingCart, User, Menu, X, ChevronDown, ChevronRight } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
@@ -15,6 +15,8 @@ const INSTITUTIONAL_RIGHT = [
   { label: "Marcas", to: "/marcas" },
   { label: "Contato", to: "/contato" },
 ];
+
+const slugTest = (s) => (s || "").replace(/[^a-z0-9]/g, "");
 
 export default function Header() {
   const [open, setOpen] = useState(false);
@@ -37,7 +39,7 @@ export default function Header() {
         <div className="max-w-[1400px] mx-auto px-4 lg:px-8">
           {/* top row */}
           <div className="flex items-center gap-4 h-20 md:h-24">
-            <button className="lg:hidden text-white" onClick={() => setOpen(!open)} data-testid="mobile-menu-toggle" aria-label="Menu">
+            <button className="lg:hidden text-white" onClick={() => setOpen(!open)} data-testid="mobile-menu-toggle" aria-label="Menu" aria-expanded={open}>
               {open ? <X size={26} /> : <Menu size={26} />}
             </button>
 
@@ -79,24 +81,14 @@ export default function Header() {
             </div>
           </div>
 
-          {/* nav row (desktop) */}
-          <nav className="hidden lg:flex items-center gap-1 pb-3 -mt-1" data-testid="desktop-nav">
-            {INSTITUTIONAL_LEFT.map((m) => (
-              <NavLink key={m.label} to={m.to} label={m.label} />
-            ))}
-            {tree.map((cat) => (
-              <CategoryMenuItem key={cat.id} cat={cat} />
-            ))}
-            {INSTITUTIONAL_RIGHT.map((m) => (
-              <NavLink key={m.label} to={m.to} label={m.label} />
-            ))}
-          </nav>
+          {/* nav row (desktop) — categorias dinâmicas com overflow "MAIS" */}
+          <DesktopNav tree={tree} />
         </div>
       </div>
 
       {/* mobile menu */}
       {open && (
-        <div className="lg:hidden bg-[#1f1f1f] border-b border-[#2e2e2e] px-4 py-4 max-h-[80vh] overflow-y-auto" data-testid="mobile-nav">
+        <div className="lg:hidden bg-[#1f1f1f] border-b border-[#2e2e2e] px-4 py-4 max-h-[80vh] overflow-y-auto overflow-x-hidden" data-testid="mobile-nav">
           <form onSubmit={submitSearch} className="relative mb-4">
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar..." className="w-full bg-[#111111] border border-[#2e2e2e] rounded-full py-2.5 pl-4 pr-12 text-sm text-white" />
             <button type="submit" className="absolute right-1.5 top-1.5 h-8 w-8 grid place-items-center rounded-full bg-[#1E3A8A] text-white"><Search size={16} /></button>
@@ -121,32 +113,152 @@ export default function Header() {
   );
 }
 
+// -------- Desktop nav com cálculo de overflow por espaço disponível --------
+function DesktopNav({ tree }) {
+  const rowRef = useRef(null);
+  const startRef = useRef(null);
+  const rightRef = useRef(null);
+  const measureRef = useRef(null);
+  const [visibleCount, setVisibleCount] = useState(tree.length);
+  const [openKey, setOpenKey] = useState(null); // slug do dropdown aberto (inclui "__more__")
+
+  const closeAll = useCallback(() => setOpenKey(null), []);
+
+  // Recalcula quantas categorias cabem, com base no espaço real disponível.
+  const recompute = useCallback(() => {
+    const row = rowRef.current, start = startRef.current, right = rightRef.current, meas = measureRef.current;
+    if (!row || !start || !right || !meas) return;
+    const GAP = 4;
+    const containerW = row.clientWidth;
+    const startW = start.offsetWidth;
+    const rightW = right.offsetWidth;
+    const catEls = Array.from(meas.querySelectorAll("[data-measure-cat]"));
+    const catWidths = catEls.map((el) => el.getBoundingClientRect().width + GAP);
+    const moreEl = meas.querySelector("[data-measure-more]");
+    const moreW = (moreEl ? moreEl.getBoundingClientRect().width : 80) + GAP;
+    const totalCats = catWidths.reduce((a, b) => a + b, 0);
+
+    if (startW + rightW + totalCats <= containerW) {
+      setVisibleCount(tree.length);
+      return;
+    }
+    const avail = containerW - startW - rightW - moreW;
+    let used = 0, n = 0;
+    for (const w of catWidths) {
+      if (used + w <= avail) { used += w; n += 1; } else break;
+    }
+    setVisibleCount(Math.max(0, n));
+  }, [tree.length]);
+
+  useLayoutEffect(() => {
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    if (rowRef.current) ro.observe(rowRef.current);
+    window.addEventListener("resize", recompute);
+    return () => { ro.disconnect(); window.removeEventListener("resize", recompute); };
+  }, [recompute, tree]);
+
+  // Fecha dropdown ao clicar fora / ESC.
+  useEffect(() => {
+    if (!openKey) return;
+    const onDocClick = (e) => { if (rowRef.current && !rowRef.current.contains(e.target)) closeAll(); };
+    const onKey = (e) => { if (e.key === "Escape") closeAll(); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDocClick); document.removeEventListener("keydown", onKey); };
+  }, [openKey, closeAll]);
+
+  const visible = tree.slice(0, visibleCount);
+  const overflow = tree.slice(visibleCount);
+
+  return (
+    <>
+      {/* Linha de medição invisível (mesmos estilos) para calcular larguras reais */}
+      <nav ref={measureRef} aria-hidden="true" className="hidden lg:flex items-center gap-1 absolute opacity-0 pointer-events-none -z-10" style={{ left: -9999, top: 0 }}>
+        {tree.map((cat) => (
+          <span key={cat.id} data-measure-cat className="flex items-center gap-1 px-3 py-1.5 text-[13px] uppercase tracking-wide font-medium">
+            {cat.name}{(cat.children || []).length > 0 && <ChevronDown size={14} />}
+          </span>
+        ))}
+        <span data-measure-more className="flex items-center gap-1 px-3 py-1.5 text-[13px] uppercase tracking-wide font-medium">Mais<ChevronDown size={14} /></span>
+      </nav>
+
+      <nav ref={rowRef} className="hidden lg:flex items-center gap-1 pb-3 -mt-1 flex-nowrap overflow-visible" data-testid="desktop-nav">
+        <span ref={startRef} className="flex items-center gap-1 shrink-0">
+          {INSTITUTIONAL_LEFT.map((m) => <NavLink key={m.label} to={m.to} label={m.label} />)}
+        </span>
+
+        <span className="flex items-center gap-1 min-w-0">
+          {visible.map((cat) => (
+            <CategoryMenuItem key={cat.id} cat={cat} openKey={openKey} setOpenKey={setOpenKey} />
+          ))}
+          {overflow.length > 0 && (
+            <MoreMenu items={overflow} openKey={openKey} setOpenKey={setOpenKey} />
+          )}
+        </span>
+
+        <span ref={rightRef} className="flex items-center gap-1 shrink-0 ml-auto">
+          {INSTITUTIONAL_RIGHT.map((m) => <NavLink key={m.label} to={m.to} label={m.label} />)}
+        </span>
+      </nav>
+    </>
+  );
+}
+
 function NavLink({ to, label }) {
   return (
-    <Link to={to} data-testid={`nav-${label.toLowerCase().replace(/[^a-z]/g, "")}`} className="px-3 py-1.5 text-[13px] uppercase tracking-wide font-medium text-gray-300 hover:text-[#FFC107] transition-colors">
+    <Link to={to} data-testid={`nav-${label.toLowerCase().replace(/[^a-z]/g, "")}`} className="px-3 py-1.5 text-[13px] uppercase tracking-wide font-medium text-gray-300 hover:text-[#FFC107] transition-colors whitespace-nowrap">
       {label}
     </Link>
   );
 }
 
-// Desktop: categoria principal clicável + dropdown de subcategorias no hover.
-function CategoryMenuItem({ cat }) {
+// Desktop: categoria raiz clicável + dropdown de subcategorias (hover + clique + teclado).
+function CategoryMenuItem({ cat, openKey, setOpenKey }) {
   const kids = cat.children || [];
-  const slugTest = cat.slug.replace(/[^a-z0-9]/g, "");
+  const key = cat.slug;
+  const st = slugTest(cat.slug);
+  const isOpen = openKey === key;
+  const wrapRef = useRef(null);
+  const closeTimer = useRef(null);
+
+  const openNow = () => { clearTimeout(closeTimer.current); if (kids.length) setOpenKey(key); };
+  const closeSoon = () => { clearTimeout(closeTimer.current); closeTimer.current = setTimeout(() => setOpenKey((k) => (k === key ? null : k)), 120); };
+
+  const onKeyDown = (e) => {
+    if (!kids.length) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setOpenKey(key);
+      // aguarda o dropdown montar para então focar o primeiro item (mesmo ArrowDown)
+      requestAnimationFrame(() => wrapRef.current?.querySelector("[data-dd-item]")?.focus());
+    }
+  };
+  const onItemKey = (e) => {
+    const items = Array.from(wrapRef.current?.querySelectorAll("[data-dd-item]") || []);
+    const i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); items[Math.min(i + 1, items.length - 1)]?.focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); if (i <= 0) return; items[i - 1]?.focus(); }
+  };
+
   return (
-    <div className="relative group" data-testid={`nav-cat-${slugTest}`}>
+    <div ref={wrapRef} className="relative shrink-0" data-testid={`nav-cat-${st}`} onMouseEnter={openNow} onMouseLeave={closeSoon}>
       <Link
         to={`/produtos?category=${cat.slug}`}
-        data-testid={`nav-cat-link-${slugTest}`}
-        className="flex items-center gap-1 px-3 py-1.5 text-[13px] uppercase tracking-wide font-medium text-gray-300 group-hover:text-[#FFC107] transition-colors"
+        data-testid={`nav-cat-link-${st}`}
+        aria-haspopup={kids.length ? "menu" : undefined}
+        aria-expanded={kids.length ? isOpen : undefined}
+        onKeyDown={onKeyDown}
+        onClick={() => kids.length && setOpenKey(isOpen ? null : key)}
+        className="flex items-center gap-1 px-3 py-1.5 text-[13px] uppercase tracking-wide font-medium text-gray-300 hover:text-[#FFC107] transition-colors whitespace-nowrap"
       >
         {cat.name}
-        {kids.length > 0 && <ChevronDown size={14} className="opacity-70 group-hover:rotate-180 transition-transform" />}
+        {kids.length > 0 && <ChevronDown size={14} className={`opacity-70 transition-transform ${isOpen ? "rotate-180" : ""}`} />}
       </Link>
-      {kids.length > 0 && (
-        <div className="absolute left-0 top-full pt-2 hidden group-hover:block z-50" data-testid={`nav-dropdown-${slugTest}`}>
-          <div className="min-w-[220px] bg-[#1f1f1f] border border-[#2e2e2e] rounded-xl shadow-2xl py-2">
-            <Link to={`/produtos?category=${cat.slug}`} className="block px-4 py-2 text-xs uppercase tracking-wider text-[#FFC107] font-bold hover:bg-white/5">
+      {kids.length > 0 && isOpen && (
+        <div className="absolute left-0 top-full pt-2 z-50" data-testid={`nav-dropdown-${st}`} role="menu" onKeyDown={onItemKey}>
+          <div className="min-w-[220px] max-w-[280px] bg-[#1f1f1f] border border-[#2e2e2e] rounded-xl shadow-2xl py-2">
+            <Link to={`/produtos?category=${cat.slug}`} data-dd-item role="menuitem" onClick={() => setOpenKey(null)} className="block px-4 py-2 text-xs uppercase tracking-wider text-[#FFC107] font-bold hover:bg-white/5 focus:bg-white/10 outline-none">
               Ver tudo de {cat.name}
             </Link>
             <div className="my-1 border-t border-[#2e2e2e]" />
@@ -154,11 +266,56 @@ function CategoryMenuItem({ cat }) {
               <Link
                 key={sub.id}
                 to={`/produtos?category=${sub.slug}`}
-                data-testid={`nav-sub-link-${sub.slug.replace(/[^a-z0-9]/g, "")}`}
-                className="block px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
+                data-dd-item
+                role="menuitem"
+                data-testid={`nav-sub-link-${slugTest(sub.slug)}`}
+                onClick={() => setOpenKey(null)}
+                className="block px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 focus:bg-white/10 outline-none transition-colors"
               >
                 {sub.name}
               </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Menu "MAIS" — recebe as categorias que não couberam (calculado por espaço).
+function MoreMenu({ items, openKey, setOpenKey }) {
+  const key = "__more__";
+  const isOpen = openKey === key;
+  const wrapRef = useRef(null);
+  const closeTimer = useRef(null);
+  const openNow = () => { clearTimeout(closeTimer.current); setOpenKey(key); };
+  const closeSoon = () => { clearTimeout(closeTimer.current); closeTimer.current = setTimeout(() => setOpenKey((k) => (k === key ? null : k)), 120); };
+
+  return (
+    <div ref={wrapRef} className="relative shrink-0" data-testid="nav-more" onMouseEnter={openNow} onMouseLeave={closeSoon}>
+      <button
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        data-testid="nav-more-btn"
+        onClick={() => setOpenKey(isOpen ? null : key)}
+        className="flex items-center gap-1 px-3 py-1.5 text-[13px] uppercase tracking-wide font-medium text-gray-300 hover:text-[#FFC107] transition-colors whitespace-nowrap"
+      >
+        Mais <ChevronDown size={14} className={`opacity-70 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+      {isOpen && (
+        <div className="absolute right-0 top-full pt-2 z-50" data-testid="nav-more-dropdown" role="menu">
+          <div className="min-w-[240px] max-w-[300px] max-h-[70vh] overflow-y-auto bg-[#1f1f1f] border border-[#2e2e2e] rounded-xl shadow-2xl py-2">
+            {items.map((cat) => (
+              <div key={cat.id} className="py-1">
+                <Link to={`/produtos?category=${cat.slug}`} role="menuitem" onClick={() => setOpenKey(null)} data-testid={`more-cat-link-${slugTest(cat.slug)}`} className="block px-4 py-1.5 text-sm uppercase tracking-wide font-semibold text-white hover:text-[#FFC107] focus:bg-white/10 outline-none">
+                  {cat.name}
+                </Link>
+                {(cat.children || []).map((sub) => (
+                  <Link key={sub.id} to={`/produtos?category=${sub.slug}`} role="menuitem" onClick={() => setOpenKey(null)} className="block px-6 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 focus:bg-white/10 outline-none">
+                    {sub.name}
+                  </Link>
+                ))}
+              </div>
             ))}
           </div>
         </div>
@@ -171,23 +328,24 @@ function CategoryMenuItem({ cat }) {
 function MobileCategory({ cat, close }) {
   const [expanded, setExpanded] = useState(false);
   const kids = cat.children || [];
-  const slugTest = cat.slug.replace(/[^a-z0-9]/g, "");
+  const st = slugTest(cat.slug);
   return (
     <div className="border-b border-[#2e2e2e]/50 last:border-0">
       <div className="flex items-center">
         <Link
           to={`/produtos?category=${cat.slug}`}
           onClick={close}
-          data-testid={`mnav-cat-link-${slugTest}`}
-          className="flex-1 px-2 py-3 text-sm uppercase tracking-wide font-semibold text-white hover:text-[#FFC107]"
+          data-testid={`mnav-cat-link-${st}`}
+          className="flex-1 px-2 py-3 text-sm uppercase tracking-wide font-semibold text-white hover:text-[#FFC107] break-words"
         >
           {cat.name}
         </Link>
         {kids.length > 0 && (
           <button
             onClick={() => setExpanded((v) => !v)}
-            data-testid={`mnav-toggle-${slugTest}`}
+            data-testid={`mnav-toggle-${st}`}
             aria-label={`Expandir ${cat.name}`}
+            aria-expanded={expanded}
             className="p-3 text-gray-400"
           >
             {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
@@ -201,8 +359,8 @@ function MobileCategory({ cat, close }) {
               key={sub.id}
               to={`/produtos?category=${sub.slug}`}
               onClick={close}
-              data-testid={`mnav-sub-link-${sub.slug.replace(/[^a-z0-9]/g, "")}`}
-              className="block px-2 py-2 text-sm text-gray-400 hover:text-white"
+              data-testid={`mnav-sub-link-${slugTest(sub.slug)}`}
+              className="block px-2 py-2 text-sm text-gray-400 hover:text-white break-words"
             >
               {sub.name}
             </Link>
