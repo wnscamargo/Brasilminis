@@ -169,3 +169,35 @@ def ct_sync(admin: dict = Depends(get_current_admin), db: Session = Depends(get_
 @router.post("/admin/superfrete/controlled-test/finalize")
 def ct_finalize(admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
     return ctest.finalize(db, admin)
+
+
+# ---------------- Etapa E: saúde do rollout / governança ----------------
+from app.services import superfrete_rollout_service as gov
+
+
+@router.get("/admin/superfrete/rollout/health")
+def rollout_health(period: str = "7d", start: str | None = None, end: str | None = None,
+                   include_test: bool = False, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return gov.compute_health(db, period, start, end, include_test)
+
+
+@router.get("/admin/superfrete/rollout/guardrails")
+def rollout_guardrails(to_mode: str, to_percentage: int | None = None,
+                       admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return gov.evaluate_guardrails(db, to_mode, to_percentage)
+
+
+@router.post("/admin/superfrete/rollout/change")
+def rollout_change(payload: dict, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return gov.change_rollout(db, admin, payload.get("to_mode", ""), payload.get("to_percentage"),
+                              payload.get("reason", ""))
+
+
+@router.post("/admin/superfrete/rollout/rollback")
+def rollout_rollback(payload: dict, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return gov.rollback(db, admin, payload.get("reason", ""), payload.get("confirm", ""))
+
+
+@router.get("/admin/superfrete/rollout/history")
+def rollout_history(limit: int = 50, admin: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return {"history": gov.list_history(db, limit)}

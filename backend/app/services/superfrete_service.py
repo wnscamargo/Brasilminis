@@ -123,6 +123,7 @@ def admin_config(db: Session) -> dict:
         "enabled_services": s.enabled_services or ["1", "2", "17"],
         "rollout_mode": s.rollout_mode or "ENABLED",
         "rollout_percentage": int(s.rollout_percentage or 0),
+        "rollout_min_orders": int(s.rollout_min_orders or 20),
         "test_order_id": s.test_order_id,
         "last_test_at": s.last_test_at,
         "last_error": s.last_error,
@@ -159,6 +160,11 @@ def update_config(db: Session, data: dict, admin: dict) -> dict:
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail="Percentual de rollout inválido.")
         s.rollout_percentage = max(0, min(100, pct))
+    if data.get("rollout_min_orders") is not None:
+        try:
+            s.rollout_min_orders = max(1, int(data["rollout_min_orders"]))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Mínimo de pedidos inválido.")
     # Token: só atualiza se vier valor NOVO (não a máscara)
     token = data.get("token")
     if token and MASK not in token:

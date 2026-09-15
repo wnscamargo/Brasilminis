@@ -455,6 +455,9 @@ class SuperfreteSettings(Base):
     rollout_percentage = Column(Integer, default=0)        # 0..100 (determinístico por user_id)
     test_order_id = Column(String, nullable=True)          # pedido de teste controlado
     controlled_test_state = Column(JSONB, nullable=True)   # checklist/estado do teste controlado
+    # ---- Etapa E: governança/saúde do rollout ----
+    rollout_min_orders = Column(Integer, default=20)       # mínimo de pedidos reais SF p/ liberar ENABLED
+    rollout_alert_state = Column(JSONB, nullable=True)     # cooldown dos alertas informativos
     created_at = Column(String, default=_now_iso)
     updated_at = Column(String, nullable=True)
 
@@ -533,6 +536,22 @@ class SuperfreteSyncRun(Base):
     status = Column(String, nullable=True)                # ok | skipped_locked | error
     last_error = Column(String, nullable=True)            # sanitizado
     created_by = Column(String, nullable=True)
+
+
+class SuperfreteRolloutHistory(Base):
+    """Histórico de mudanças de rollout (governança). Motivo obrigatório."""
+    __tablename__ = "superfrete_rollout_history"
+    id = Column(String, primary_key=True, default=_uuid)
+    from_mode = Column(String, nullable=True)
+    to_mode = Column(String, nullable=True)
+    from_percentage = Column(Integer, nullable=True)
+    to_percentage = Column(Integer, nullable=True)
+    admin_id = Column(String, nullable=True)
+    admin_email = Column(String, nullable=True)
+    reason = Column(String, nullable=True)
+    metrics_snapshot = Column(JSONB, nullable=True)
+    created_at = Column(String, default=_now_iso)
+
 
 
 # ================= Mercado Pago (TESTE) =================

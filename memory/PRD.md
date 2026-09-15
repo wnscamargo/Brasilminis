@@ -519,3 +519,29 @@ A SuperFrete NÃO expõe contrato público completo para compra/emissão/cancela
 
 ### Estado do preview: SuperFrete DESABILITADA (sem token), `rollout_mode=TEST_ORDER_ONLY`, sem pedidos de teste. Head Alembic único: `b8c9d0e1f2a3`.
 ### NENHUM DEPLOY REALIZADO. NENHUM PUSH PARA python-vps. NENHUM PEDIDO REAL ALTERADO. SUPERFRETE AINDA NÃO LIBERADA PARA TODOS OS CLIENTES.
+
+---
+
+## SuperFrete — ETAPA E (14/Jun/2026) — Saúde do rollout + governança operacional (PREVIEW, sem deploy)
+
+### Painel "Saúde do rollout" (Admin → SuperFrete, admin-only, READ-ONLY)
+- `superfrete_rollout_service.compute_health(db, period, start, end, include_test)`: KPIs (pedidos elegíveis/SF/ME, %SF real, cotações registradas, shipments criados/erro, etiquetas API/híbrido, tracking, entregues, devolvidos, tempo médio até criação, tempo médio sem atualização, taxa de sync OK, 401/403/429/5xx/timeouts derivados de last_error/sync_runs), comparação SF×ME, funil (Elegível→Cotação→Escolha→Shipment→Etiqueta→Tracking→Trânsito→Entregue com conversão), %configurado vs %observado (amostra = pedidos logados após a última mudança de rollout). Períodos 24h/7d/30d/custom. Toggle "Incluir pedidos de teste" (OFF por padrão; `is_test_order` sempre fora das métricas reais). Campos sem fonte confiável marcados em `no_data_fields` (honestidade — nunca inventados).
+- **Alertas informativos** com cooldown (6h, estado em `rollout_alert_state`): AUTH_FAILURE, HIGH_ERROR_RATE, SYNC_STALE, RATE_LIMIT, LABEL_PENDING, TRACKING_MISSING, DELIVERY_DELAY, RETURN_RATE_HIGH (flag `throttled` evita repetição a cada ciclo).
+- **Recomendação informativa** (MANTER/PODE_AUMENTAR/RECOMENDA_REDUZIR/RECOMENDA_DESABILITAR) com `reason_codes`. NUNCA altera rollout sozinho.
+
+### Governança (manual, com guardrails)
+- `evaluate_guardrails(db, to_mode, to_pct)`: ADMIN_ONLY→PERCENTAGE exige validação controlada APPROVED; qualquer→ENABLED exige APPROVED + `rollout_min_orders` (default 20) pedidos reais SF + sem suspensão global + status connected; PERCENTAGE exige 1..100; liberar exige token habilitado. Bloqueia com explicação (nunca aplica sozinho).
+- `change_rollout(...)`: motivo obrigatório + guardrails + aplica + registra `SuperfreteRolloutHistory` (from/to mode+pct, admin, reason, metrics_snapshot) + audit SUPERFRETE_ROLLOUT_CHANGED.
+- `rollback(...)`: exige motivo + confirmação textual "DESATIVAR SUPERFRETE" → rollout_mode=DISABLED. NÃO cancela shipments existentes (scheduler segue acompanhando). Provider/histórico de pedidos existentes nunca muda retroativamente.
+- Endpoints admin-only: `GET /api/admin/superfrete/rollout/health|guardrails|history`, `POST .../change|rollback`.
+
+### Frontend
+- Painel "Saúde do rollout" em Admin → SuperFrete: recomendação, período, toggle teste, alertas, KPIs, comparação, funil, %config vs observado, bloco "Alterar rollout" (preview de guardrails em tempo real, motivo obrigatório), "Rollback de emergência" (confirmação textual), histórico de mudanças.
+
+### Migration ADITIVA `c9d0e1f2a3b4` (down_revision b8c9d0e1f2a3; head único): +`rollout_min_orders`, +`rollout_alert_state` em superfrete_settings; +tabela `superfrete_rollout_history`. Pedidos de teste excluídos de `analytics_service` e `/api/admin/stats`.
+
+### Testes
+- `tests/test_superfrete_rollout_health.py` **14/14** (métricas excluem teste, período, comparação, funil, alertas+cooldown, recomendação+reason_codes, sem auto-rollout, guardrails ADMIN_ONLY→PERCENTAGE e →ENABLED, motivo obrigatório, rollback preserva shipments/histórico, histórico, RBAC). Suíte completa **246 passed, 1 skipped**. Build frontend OK. Frontend E2E (testing_agent iteration_16): **100%, 0 bugs**, token nunca em texto puro, responsivo.
+
+### Estado do preview: SuperFrete DESABILITADA (sem token), `rollout_mode=TEST_ORDER_ONLY`, sem pedidos/shipments/histórico de teste. Head Alembic único: `c9d0e1f2a3b4`.
+### NENHUM DEPLOY REALIZADO. NENHUM PUSH PARA python-vps. NENHUM ROLLOUT ALTERADO EM PRODUÇÃO. SUPERFRETE CONTINUA SOB CONTROLE MANUAL.
